@@ -1,45 +1,23 @@
-plugins {
-    id("com.android.application")
-    id("org.jetbrains.kotlin.android")
-}
-android {
-    namespace = "com.legend.mc"
-    compileSdk = 34
-    defaultConfig {
-        applicationId = "com.legend.mc"
-        minSdk = 24
-        targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
-    }
-    buildTypes {
-        release {
-            isMinifyEnabled = false
-        }
-    }
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
-    }
-    kotlinOptions {
-        jvmTarget = "17"
-    }
-    buildFeatures {
-        compose = true
-    }
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.14"
-    }
-}
-dependencies {
-    implementation("androidx.core:core-ktx:1.12.0")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
-    implementation("androidx.activity:activity-compose:1.8.2")
-    implementation(platform("androidx.compose:compose-bom:2024.02.00"))
-    implementation("androidx.compose.ui:ui")
-    implementation("androidx.compose.ui:ui-graphics")
-    implementation("androidx.compose.ui:ui-tooling-preview")
-    implementation("androidx.compose.material3:material3")
-    implementation("androidx.appcompat:appcompat:1.6.1")
-    implementation("com.google.android.material:material:1.11.0")
-}
+[1mdiff --git a/app/build.gradle.kts b/app/build.gradle.kts[m
+[1mindex dc02ec6..bd24264 100644[m
+[1m--- a/app/build.gradle.kts[m
+[1m+++ b/app/build.gradle.kts[m
+[36m@@ -28,7 +28,7 @@[m [mandroid {[m
+         compose = true[m
+     }[m
+     composeOptions {[m
+[31m-        kotlinCompilerExtensionVersion = "1.5.14"[m
+[32m+[m[32m        kotlinCompilerExtensionVersion = "1.5.4"[m
+     }[m
+ }[m
+ dependencies {[m
+[1mdiff --git a/build.gradle.kts b/build.gradle.kts[m
+[1mindex e3e570a..4055907 100644[m
+[1m--- a/build.gradle.kts[m
+[1m+++ b/build.gradle.kts[m
+[36m@@ -1,4 +1,4 @@[m
+ plugins {[m
+     id("com.android.application") version "8.7.3" apply false[m
+[31m-    id("org.jetbrains.kotlin.android") version "1.9.22" apply false[m
+[32m+[m[32m    id("org.jetbrains.kotlin.android") version "1.9.24" apply false[m
+ }[m
