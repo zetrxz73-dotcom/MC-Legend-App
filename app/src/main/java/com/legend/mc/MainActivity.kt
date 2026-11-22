@@ -271,7 +271,7 @@ fun CommandBuilderScreen(isArabic:Boolean) {
         OutlinedTextField(value = item, onValueChange = { item = it }, label = { Text("Item") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(value = amount, onValueChange = { amount = it }, label = { Text("Amount") }, modifier = Modifier.fillMaxWidth())
         Button(onClick = { result = "/give $target $item $amount" }, modifier = Modifier.fillMaxWidth()) { Text(if(isArabic) "توليد الأمر" else "Generate") }
-        if(result.isNotEmpty()) Text(result, color = Color(0xFF0FF0C553), fontWeight = FontWeight.Bold)
+        if(result.isNotEmpty(0xFFFFC107) Text(result, color = Color(), fontWeight = FontWeight.Bold)
     }
 }
 
