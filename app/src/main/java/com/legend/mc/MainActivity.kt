@@ -1,249 +1,292 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 package com.legend.mc
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import android.provider.OpenableColumns
+import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.File
+import java.util.UUID
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 
-data class Command(val name: String, val cmd: String, val desc: String, val descAr: String, val cat: String)
+private const val PREFS = "mc_legend_data"
+private const val KEY_COMMANDS = "commands"
+private const val KEY_PASSWORD = "password"
+private const val KEY_HISTORY = "history"
+private const val KEY_MODS = "mods"
+private const val KEY_ENGLISH = "english"
+
+data class LegendCommand(
+    val id: Int,
+    val title: String,
+    val command: String,
+    val description: String,
+    val category: String,
+    val favorite: Boolean = false
+)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { MCApp() }
+        setContent {
+            MaterialTheme(
+                colorScheme = darkColorScheme(
+                    primary = Color(0xFFAA82FF),
+                    secondary = Color(0xFF62D6A5),
+                    background = Color(0xFF090B12),
+                    surface = Color(0xFF171B28)
+                )
+            ) {
+                MC_Legend_App()
+            }
+        }
     }
 }
 
 @Composable
-fun MCApp() {
-    var isArabic by remember { mutableStateOf(false) }
-    var unlocked by remember { mutableStateOf(false) }
-    var password by remember { mutableStateOf("") }
-    var search by remember { mutableStateOf("") }
-    var selectedCat by remember { mutableStateOf("All") }
-    var selected by remember { mutableStateOf<Command?>(null) }
-    var favorites by remember { mutableStateOf(setOf<String>()) }
+fun MC_Legend_App() {
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences(PREFS, Context.MODE_PRIVATE) }
 
-    if (!unlocked) {
-        Box(modifier = Modifier.fillMaxSize().background(Color(0xFF121212)), contentAlignment = Alignment.Center) {
-            Card(modifier = Modifier.padding(20.dp).fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E1E))) {
-                Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("⛏️ MC Legend", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(if (isArabic) "اكتب كلمة السر للدخول" else "Enter password", color = Color.Gray)
-                    Spacer(modifier = Modifier.height(16.dp))
-                    OutlinedTextField(value = password, onValueChange = { password = it }, label = { Text("Password") }, modifier = Modifier.fillMaxWidth())
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Button(onClick = { if (password == "1234") unlocked = true }, modifier = Modifier.fillMaxWidth()) {
-                        Text(if (isArabic) "دخول" else "Unlock")
-                    }
-                    TextButton(onClick = { isArabic = !isArabic }) { Text(if (isArabic) "English" else "عربي") }
-                    Text("Pass: 1234", color = Color.Gray, fontSize = 12.sp)
-                }
+    var unlocked by rememberSaveable { mutableStateOf(false) }
+    var password by rememberSaveable { mutableStateOf("") }
+    var storedPassword by remember { mutableStateOf(prefs.getString(KEY_PASSWORD, "1234") ?: "1234") }
+    var english by remember { mutableStateOf(prefs.getBoolean(KEY_ENGLISH, false)) }
+    var tab by rememberSaveable { mutableStateOf(0) }
+    var search by rememberSaveable { mutableStateOf("") }
+    var category by rememberSaveable { mutableStateOf("الكل") }
+    var editorOpen by remember { mutableStateOf(false) }
+    var passwordDialog by remember { mutableStateOf(false) }
+    var addonDialog by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf<LegendCommand?>(null) }
+    var addonName by rememberSaveable { mutableStateOf("MC Legend Pack") }
+
+    val commands = remember {
+        mutableStateListOf<LegendCommand>().apply {
+            addAll(loadCommands(context))
+        }
+    }
+    val history = remember {
+        mutableStateListOf<String>().apply {
+            addAll(loadStringList(context, KEY_HISTORY))
+        }
+    }
+    val mods = remember {
+        mutableStateListOf<String>().apply {
+            addAll(loadStringList(context, KEY_MODS))
+        }
+    }
+
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            try {
+                val name = getDisplayName(context, uri)
+                val folder = File(context.filesDir, "imported_mods")
+                if (!folder.exists()) folder.mkdirs()
+                val safeName = name.replace(Regex("[^A-Za-z0-9._-]"), "_")
+                    .ifBlank { "minecraft_pack.mcpack" }
+                val destination = File(folder, "${System.currentTimeMillis()}_$safeName")
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    destination.outputStream().use { output -> input.copyTo(output) }
+                } ?: throw IllegalStateException("تعذر قراءة الملف")
+                mods.add(destination.name)
+                saveStringList(context, KEY_MODS, mods)
+                toast(context, "تم استيراد الملف إلى مساحة التطبيق")
+            } catch (error: Exception) {
+                toast(context, "تعذر استيراد الملف: ${error.message}")
             }
         }
+    }
+
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/zip")
+    ) { uri: Uri? ->
+        if (uri != null) {
+            try {
+                exportBehaviorPack(context, uri, addonName)
+                toast(context, "تم إنشاء حزمة Behavior Pack")
+            } catch (error: Exception) {
+                toast(context, "فشل التصدير: ${error.message}")
+            }
+        }
+    }
+
+    if (!unlocked) {
+        PasswordPage(
+            password = password,
+            onPasswordChange = { password = it },
+            onLogin = {
+                if (password == storedPassword) {
+                    unlocked = true
+                    password = ""
+                } else {
+                    toast(context, if (english) "Wrong password" else "كلمة المرور غير صحيحة")
+                }
+            },
+            english = english
+        )
         return
     }
 
-    val all = allCommands()
-    val cats = listOf("All") + all.map { it.cat }.distinct()
-    val filtered = all.filter {
-        (selectedCat == "All" || it.cat == selectedCat) &&
-        (search.isEmpty() || it.name.contains(search, true) || it.cmd.contains(search, true))
+    val filtered = commands.filter { item ->
+        val matchesSearch = item.title.contains(search, true) ||
+            item.command.contains(search, true) ||
+            item.description.contains(search, true)
+        val matchesCategory = category == "الكل" || item.category == category
+        val matchesTab = when (tab) {
+            1 -> item.favorite
+            else -> true
+        }
+        matchesSearch && matchesCategory && matchesTab
     }
 
     Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("⛏️ MC Legend") },
-                actions = { TextButton(onClick = { isArabic = !isArabic }) { Text(if (isArabic) "EN" else "ع", color = Color.White) } },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF121212), titleContentColor = Color.White)
-            )
-        },
-        containerColor = Color(0xFF121212)
-    ) { pad ->
-        Column(modifier = Modifier.padding(pad).padding(12.dp).fillMaxSize()) {
-            OutlinedTextField(value = search, onValueChange = { search = it }, label = { Text(if (isArabic) "ابحث..." else "Search...") }, modifier = Modifier.fillMaxWidth())
-            Spacer(modifier = Modifier.height(10.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                cats.forEach { cat ->
-                    FilterChip(
-                        selected = selectedCat == cat,
-                        onClick = { selectedCat = cat },
-                        label = { Text(cat) }
+        containerColor = Color(0xFF090B12),
+        bottomBar = {
+            NavigationBar(containerColor = Color(0xFF151927)) {
+                val labels = if (english)
+                    listOf("Commands", "Favorites", "History", "Packs", "Settings")
+                else
+                    listOf("الأوامر", "المفضلة", "السجل", "المودات", "الإعدادات")
+                labels.forEachIndexed { index, label ->
+                    NavigationBarItem(
+                        selected = tab == index,
+                        onClick = { tab = index },
+                        icon = { Text(listOf("⌘", "★", "◷", "▣", "⚙")[index]) },
+                        label = { Text(label, fontSize = 10.sp) }
                     )
-                }
-            }
-            Spacer(modifier = Modifier.height(10.dp))
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(filtered) { c ->
-                    Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF1E1E1E)), modifier = Modifier.fillMaxWidth().clickable { selected = c }) {
-                        Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(c.name, color = Color.White, fontWeight = FontWeight.Bold)
-                                Text(if (isArabic) c.descAr else c.desc, color = Color.Gray, fontSize = 12.sp)
-                                Text(c.cmd, color = Color(0xFF4CAF50), fontSize = 12.sp)
-                            }
-                            Text(if (favorites.contains(c.cmd)) "⭐" else "☆", fontSize = 22.sp, modifier = Modifier.clickable {
-                                favorites = if (favorites.contains(c.cmd)) favorites - c.cmd else favorites + c.cmd
-                            })
-                        }
-                    }
                 }
             }
         }
-    }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(14.dp)
+        ) {
+            Text(
+                "MC LEGEND",
+                color = Color(0xFFB99AFF),
+                fontSize = 27.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                if (english) "Minecraft Bedrock command and pack assistant"
+                else "مساعد أوامر ومودات Minecraft Bedrock",
+                color = Color.LightGray,
+                fontSize = 12.sp
+            )
+            Spacer(Modifier.height(10.dp))
 
-    if (selected != null) {
-        AlertDialog(
-            onDismissRequest = { selected = null },
-            title = { Text(selected!!.name) },
-            text = { Text(selected!!.cmd + "\n\n" + if (isArabic) selected!!.descAr else selected!!.desc) },
-            confirmButton = { TextButton(onClick = { selected = null }) { Text("OK") } }
-        )
-    }
-}
-
-fun allCommands(): List<Command> {
-    return listOf(
-        Command("Gamemode Creative", "/gamemode creative", "Creative mode", "وضع الابداع", "Game"),
-        Command("Gamemode Survival", "/gamemode survival", "Survival mode", "وضع البقاء", "Game"),
-        Command("Give Diamond Sword", "/give @p diamond_sword", "Get diamond sword", "سيف دايموند", "Items"),
-        Command("Give Diamonds", "/give @p diamond 64", "Get 64 diamonds", "64 دايموند", "Items"),
-        Command("Teleport", "/tp @p ~ ~ ~", "Teleport", "انتقال", "Game"),
-        Command("Time Day", "/time set day", "Set day", "وقت نهار", "World"),
-        Command("Time Night", "/time set night", "Set night", "وقت ليل", "World"),
-        Command("Weather Clear", "/weather clear", "Clear weather", "جو صافي", "World"),
-        Command("Weather Rain", "/weather rain", "Rain", "مطر", "World"),
-        Command("Summon Zombie", "/summon zombie", "Summon zombie", "استدعاء زومبي", "Mobs"),
-        Command("Summon Creeper", "/summon creeper", "Summon creeper", "استدعاء كريبر", "Mobs"),
-        Command("Kill All", "/kill @e", "Kill all entities", "قتل الكل", "Game"),
-        Command("Heal", "/effect give @p regeneration 10 2", "Heal", "علاج", "Game"),
-        Command("Speed", "/effect give @p speed 30 2", "Speed", "سرعة", "Game"),
-        Command("Fly - Elytra", "/give @p elytra", "Get elytra to fly", "اجنحة طيران", "Items"),
-        Command("Clear Mobs", "/kill @e[type=!player]", "Clear mobs", "مسح الوحوش", "Mobs"),
-        Command("Give Gold", "/give @p gold_ingot 64", "Gold", "ذهب", "Items"),
-        Command("Give Iron", "/give @p iron_ingot 64", "Iron", "حديد", "Items"),
-        Command("Give Enchanted Apple", "/give @p enchanted_golden_apple 10", "Enchanted apple", "تفاحة ذهبية", "Items"),
-        Command("Set Spawn", "/setworldspawn", "Set spawn", "تعيين البداية", "World")
-    )
-}
-
-                    Spacer(Modifier.height(9.dp))
-
-                    Row(
-                        Modifier.fillMaxWidth().horizontalScroll(
-                            rememberScrollState()
-                        ),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        categories.forEach { category ->
-                            FilterChip(
-                                selected = selectedCat == category,
-                                onClick = { selectedCat = category },
-                                label = {
-                                    Text(categoryLabel(category, isArabic))
-                                }
-                            )
-                        }
-                    }
+            when (tab) {
+                0, 1 -> {
+                    Button(
+                        onClick = { openMinecraft(context) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text(if (english) "Open Minecraft" else "فتح Minecraft") }
 
                     Spacer(Modifier.height(8.dp))
-
-                    Text(
-                        "${visibleCommands.size} / ${commands.size}",
-                        color = Purple,
-                        fontSize = 12.sp
+                    OutlinedTextField(
+                        value = search,
+                        onValueChange = { search = it },
+                        label = { Text(if (english) "Search commands" else "ابحث عن أمر") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
                     )
-
+                    Spacer(Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        OutlinedButton(onClick = { category = "الكل" }) { Text("الكل") }
+                        OutlinedButton(onClick = { category = "اللعب" }) { Text("اللعب") }
+                        OutlinedButton(onClick = { category = "العالم" }) { Text("العالم") }
+                        OutlinedButton(onClick = { category = "التأثيرات" }) { Text("التأثيرات") }
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("الأوامر: ${filtered.size}", color = Color.LightGray)
+                        Spacer(Modifier.weight(1f))
+                        Button(onClick = {
+                            editing = null
+                            editorOpen = true
+                        }) { Text("إضافة أمر +") }
+                    }
                     LazyColumn(
                         modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        contentPadding = PaddingValues(bottom = 12.dp)
-                    ) {
-                        items(visibleCommands, key = { it.id }) { command ->
-                            CommandCard(
-                                command = command,
-                                isArabic = isArabic,
-                                favorite = favorites.contains(command.id),
-                                onFavorite = {
-                                    favorites =
-                                        if (favorites.contains(command.id))
-                                            favorites - command.id
-                                        else favorites + command.id
-                                    saveAll()
-                                },
-                                onCopy = { copyCommand(command) },
-                                onEdit = {
-                                    editing = command
-                                    showCommandDialog = true
-                                },
-                                onDelete = {
-                                    commands = commands.filterNot {
-                                        it.id == command.id
-                                    }
-                                    favorites = favorites - command.id
-                                    saveAll()
-                                }
-                            )
-                        }
-                    }
-                }
-
-                1 -> {
-                    SectionTitle(
-                        if (isArabic)
-                            "الأوامر المفضلة ⭐"
-                        else "Favorite commands ⭐"
-                    )
-
-                    val favCommands =
-                        commands.filter { favorites.contains(it.id) }
-
-                    if (favCommands.isEmpty()) {
-                        EmptyMessage(
-                            if (isArabic)
-                                "لم تضف أوامر للمفضلة بعد"
-                            else "No favorites yet"
-                        )
-                    }
-
-                    LazyColumn(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        items(favCommands, key = { it.id }) { command ->
-                            CommandCard(
-                                command,
-                                isArabic,
-                                true,
-                                onFavorite = {
-                                    favorites = favorites - command.id
-                                    saveAll()
+                        items(filtered, key = { it.id }) { item ->
+                            CommandTile(
+                                item = item,
+                                english = english,
+                                onCopy = {
+                                    copyCommand(context, item.command)
+                                    history.add(0, item.command)
+                                    while (history.size > 40) history.removeAt(history.lastIndex)
+                                    saveStringList(context, KEY_HISTORY, history)
                                 },
-                                onCopy = { copyCommand(command) },
+                                onFavorite = {
+                                    val index = commands.indexOfFirst { it.id == item.id }
+                                    if (index >= 0) {
+                                        commands[index] = item.copy(favorite = !item.favorite)
+                                        saveCommands(context, commands)
+                                    }
+                                },
                                 onEdit = {
-                                    editing = command
-                                    showCommandDialog = true
+                                    editing = item
+                                    editorOpen = true
                                 },
                                 onDelete = {
-                                    commands = commands.filterNot {
-                                        it.id == command.id
-                                    }
-                                    favorites = favorites - command.id
-                                    saveAll()
+                                    commands.removeAll { it.id == item.id }
+                                    saveCommands(context, commands)
                                 }
                             )
                         }
@@ -251,1062 +294,537 @@ fun allCommands(): List<Command> {
                 }
 
                 2 -> {
-                    SectionTitle(
-                        if (isArabic)
-                            "آخر الأوامر المنسوخة"
-                        else "Recently copied"
-                    )
-
-                    if (history.isEmpty()) {
-                        EmptyMessage(
-                            if (isArabic)
-                                "لا يوجد سجل حتى الآن"
-                            else "History is empty"
-                        )
-                    }
-
-                    LazyColumn {
-                        items(history) { cmd ->
-                            Card(
-                                colors = CardDefaults.cardColors(
-                                    containerColor = Panel
-                                ),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp)
-                            ) {
+                    Text(if (english) "Recently copied commands" else "آخر الأوامر المنسوخة",
+                        color = Color.White, fontWeight = FontWeight.Bold)
+                    OutlinedButton(onClick = {
+                        history.clear()
+                        saveStringList(context, KEY_HISTORY, history)
+                    }) { Text(if (english) "Clear history" else "مسح السجل") }
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(history) { value ->
+                            Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF171B28))) {
                                 Row(
-                                    Modifier.padding(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                                    Modifier.fillMaxWidth().padding(12.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
-                                    Text(
-                                        cmd,
-                                        color = Green,
-                                        modifier = Modifier.weight(1f),
-                                        fontSize = 12.sp
-                                    )
-
-                                    TextButton(onClick = {
-                                        val clip =
-                                            context.getSystemService(
-                                                Context.CLIPBOARD_SERVICE
-                                            ) as ClipboardManager
-
-                                        clip.setPrimaryClip(
-                                            ClipData.newPlainText(
-                                                "Minecraft command",
-                                                cmd
-                                            )
-                                        )
-
-                                        toast(
-                                            context,
-                                            if (isArabic) "تم النسخ" else "Copied"
-                                        )
-                                    }) {
-                                        Text(
-                                            if (isArabic) "نسخ" else "Copy"
-                                        )
+                                    Text(value, color = Color(0xFF65D6A3), modifier = Modifier.weight(1f))
+                                    OutlinedButton(onClick = { copyCommand(context, value) }) {
+                                        Text(if (english) "Copy" else "نسخ")
                                     }
                                 }
                             }
                         }
-                    }
-
-                    TextButton(
-                        onClick = {
-                            history = emptyList()
-                            saveAll()
-                        }
-                    ) {
-                        Text(
-                            if (isArabic)
-                                "مسح السجل"
-                            else "Clear history"
-                        )
                     }
                 }
 
                 3 -> {
-                    SectionTitle(
-                        if (isArabic)
-                            "مدير المودات والإضافات"
-                        else "Add-on manager"
-                    )
-
+                    Text(if (english) "Pack manager" else "مدير المودات والحزم",
+                        color = Color.White, fontWeight = FontWeight.Bold)
                     Text(
-                        if (isArabic)
-                            "استورد ملفات mcpack أو mcaddon لفتحها باستخدام Minecraft، أو أنشئ إضافة تجريبية خاصة بك."
-                        else
-                            "Import mcpack or mcaddon files, or create a starter add-on.",
-                        color = Color.LightGray,
-                        fontSize = 12.sp
+                        if (english) "Import .mcpack/.mcaddon files or create a starter behavior pack."
+                        else "استورد ملفات mcpack وmcaddon، أو أنشئ حزمة Behavior Pack أولية.",
+                        color = Color.LightGray
                     )
-
                     Spacer(Modifier.height(10.dp))
-
                     Button(
-                        onClick = {
-                            importLauncher.launch(arrayOf("*/*"))
-                        },
+                        onClick = { importLauncher.launch(arrayOf("*/*")) },
                         modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            if (isArabic)
-                                "＋ استيراد ملف مود"
-                            else "＋ Import add-on"
-                        )
-                    }
-
-                    Spacer(Modifier.height(8.dp))
-
-                    Text(
-                        if (isArabic)
-                            "الملفات المستوردة"
-                        else "Imported files",
-                        color = Purple,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    if (importedMods.isEmpty()) {
-                        EmptyMessage(
-                            if (isArabic)
-                                "لم تستورد ملفات بعد"
-                            else "No imported files"
-                        )
-                    }
-
-                    importedMods.forEach { raw ->
-                        val uri = Uri.parse(raw)
-
-                        Card(
-                            colors = CardDefaults.cardColors(
-                                containerColor = Panel
-                            ),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 3.dp)
-                        ) {
-                            Row(
-                                Modifier.padding(8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    uri.lastPathSegment ?: "Addon file",
-                                    color = Color.White,
-                                    modifier = Modifier.weight(1f),
-                                    fontSize = 11.sp
-                                )
-
-                                TextButton(
-                                    onClick = {
-                                        openUri(context, uri)
-                                    }
-                                ) {
-                                    Text(
-                                        if (isArabic) "فتح" else "Open"
-                                    )
-                                }
-
-                                TextButton(
-                                    onClick = {
-                                        importedMods =
-                                            importedMods - raw
-
-                                        prefs.edit()
-                                            .putString(
-                                                "imported_mods",
-                                                importedMods.joinToString("\n")
-                                            )
-                                            .apply()
-                                    }
-                                ) {
-                                    Text("×")
-                                }
+                    ) { Text(if (english) "Import pack" else "استيراد مود / حزمة") }
+                    Button(
+                        onClick = { addonDialog = true },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text(if (english) "Create / export MCADDON" else "إنشاء وتصدير MCADDON") }
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        items(mods) { fileName ->
+                            Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF171B28))) {
+                                Text(fileName, color = Color.White, modifier = Modifier.padding(12.dp))
                             }
                         }
                     }
-
-                    HorizontalDivider(
-                        Modifier.padding(vertical = 10.dp),
-                        color = Color.DarkGray
-                    )
-
-                    SectionTitle(
-                        if (isArabic)
-                            "إنشاء إضافة تجريبية"
-                        else "Create starter add-on"
-                    )
-
-                    OutlinedTextField(
-                        addonName,
-                        { addonName = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = {
-                            Text(
-                                if (isArabic)
-                                    "اسم الإضافة"
-                                else "Add-on name"
-                            )
-                        },
-                        singleLine = true
-                    )
-
-                    OutlinedTextField(
-                        functionName,
-                        { functionName = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = {
-                            Text(
-                                if (isArabic)
-                                    "اسم ملف الوظيفة"
-                                else "Function file name"
-                            )
-                        },
-                        singleLine = true
-                    )
-
-                    OutlinedTextField(
-                        functionText,
-                        { functionText = it },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 100.dp),
-                        label = {
-                            Text(
-                                if (isArabic)
-                                    "أوامر الوظيفة (كل أمر في سطر)"
-                                else "Function commands"
-                            )
-                        }
-                    )
-
-                    Button(
-                        onClick = {
-                            val safe = addonName.trim()
-                                .ifBlank { "MC_Legend_Addon" }
-                                .replace(
-                                    Regex("[^A-Za-z0-9_-]"),
-                                    "_"
-                                )
-
-                            exportLauncher.launch("$safe.mcaddon")
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            if (isArabic)
-                                "تصدير MCADDON"
-                            else "Export MCADDON"
-                        )
-                    }
-
-                    Text(
-                        if (isArabic)
-                            "هذه أداة بداية تنشئ حزمة Behavior Pack بسيطة بملف manifest ووظيفة mcfunction."
-                        else
-                            "Creates a starter Behavior Pack with manifest and mcfunction.",
-                        color = Color.Gray,
-                        fontSize = 10.sp
-                    )
                 }
 
-                else -> {
-                    SectionTitle(
-                        if (isArabic) "الإعدادات" else "Settings"
-                    )
-
+                4 -> {
+                    Text(if (english) "Settings" else "الإعدادات",
+                        color = Color.White, fontWeight = FontWeight.Bold)
+                    Button(onClick = { passwordDialog = true }, modifier = Modifier.fillMaxWidth()) {
+                        Text(if (english) "Change password" else "تغيير كلمة المرور")
+                    }
                     Button(
                         onClick = {
-                            val launch =
-                                context.packageManager
-                                    .getLaunchIntentForPackage(
-                                        "com.mojang.minecraftpe"
-                                    )
-
-                            if (launch != null) {
-                                context.startActivity(launch)
-                            } else {
-                                toast(
-                                    context,
-                                    if (isArabic)
-                                        "لم يتم العثور على Minecraft"
-                                    else "Minecraft not found"
-                                )
-                            }
+                            english = !english
+                            prefs.edit().putBoolean(KEY_ENGLISH, english).apply()
                         },
                         modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            if (isArabic)
-                                "🎮 فتح Minecraft مباشرة"
-                            else "🎮 Launch Minecraft"
-                        )
-                    }
-
+                    ) { Text(if (english) "Switch to Arabic" else "Switch to English") }
                     OutlinedButton(
                         onClick = {
-                            showPasswordDialog = true
+                            unlocked = false
+                            tab = 0
                         },
                         modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            if (isArabic)
-                                "🔐 تغيير كلمة المرور"
-                            else "🔐 Change password"
-                        )
-                    }
-
-                    OutlinedButton(
-                        onClick = {
-                            isArabic = !isArabic
-                            prefs.edit()
-                                .putBoolean("arabic", isArabic)
-                                .apply()
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            if (isArabic)
-                                "تغيير اللغة إلى English"
-                            else "Change language to العربية"
-                        )
-                    }
-
-                    Spacer(Modifier.height(12.dp))
-
+                    ) { Text(if (english) "Lock app" else "قفل التطبيق") }
                     Text(
-                        if (isArabic) "عن التطبيق" else "About",
-                        color = Purple,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    Text(
-                        "MC Legend • Bedrock Tools",
-                        color = Color.White
-                    )
-
-                    Text(
-                        if (isArabic)
-                            "الأوامر تُنسخ فقط ولا تُنفذ تلقائياً. الصقها داخل عالمك مع تفعيل Cheats. كلمة المرور محلية وبسيطة وليست تشفيراً أمنياً."
-                        else
-                            "Commands are copied, not executed automatically. Paste them in your world with Cheats enabled.",
+                        if (english) "Default password: 1234. Commands are copied to the clipboard; they are not executed automatically."
+                        else "كلمة المرور الافتراضية: 1234. الأوامر تُنسخ إلى الحافظة ولا تُنفّذ تلقائيًا داخل اللعبة.",
                         color = Color.Gray,
-                        fontSize = 11.sp
+                        fontSize = 12.sp
+                    )
+                    Text(
+                        if (english) "Pack export creates a starter Behavior Pack, not a full visual mod editor."
+                        else "تصدير الحزمة ينشئ Behavior Pack أولية، وليس محرر مودات مرئيًا متكاملًا.",
+                        color = Color.Gray,
+                        fontSize = 12.sp
                     )
                 }
             }
         }
     }
 
-    if (showCommandDialog) {
-        CommandEditorDialog(
-            initial = editing,
-            isArabic = isArabic,
-            onDismiss = {
-                showCommandDialog = false
-                editing = null
-            },
-            onSave = { name, cmd, desc, descAr, cat ->
-                val item = Command(
-                    editing?.id ?: UUID.randomUUID().toString(),
-                    name,
-                    cmd,
-                    desc,
-                    descAr,
-                    cat
-                )
-
-                commands =
-                    if (editing == null)
-                        commands + item
-                    else
-                        commands.map {
-                            if (it.id == item.id) item else it
-                        }
-
-                saveAll()
-                showCommandDialog = false
-                editing = null
+    if (editorOpen) {
+        CommandDialog(
+            command = editing,
+            onDismiss = { editorOpen = false },
+            onSave = { title, value, description, group ->
+                if (editing == null) {
+                    val newId = (commands.maxOfOrNull { it.id } ?: 0) + 1
+                    commands.add(LegendCommand(newId, title, value, description, group))
+                } else {
+                    val old = editing!!
+                    val index = commands.indexOfFirst { it.id == old.id }
+                    if (index >= 0) {
+                        commands[index] = old.copy(
+                            title = title,
+                            command = value,
+                            description = description,
+                            category = group
+                        )
+                    }
+                }
+                saveCommands(context, commands)
+                editorOpen = false
             }
         )
     }
 
-    if (showPasswordDialog) {
+    if (passwordDialog) {
+        ChangePasswordDialog(
+            onDismiss = { passwordDialog = false },
+            onSave = { newPassword ->
+                storedPassword = newPassword
+                prefs.edit().putString(KEY_PASSWORD, newPassword).apply()
+                passwordDialog = false
+                toast(context, "تم تغيير كلمة المرور")
+            }
+        )
+    }
+
+    if (addonDialog) {
         AlertDialog(
-            onDismissRequest = {
-                showPasswordDialog = false
-            },
-            title = {
-                Text(
-                    if (isArabic)
-                        "تغيير كلمة المرور"
-                    else "Change password"
+            onDismissRequest = { addonDialog = false },
+            title = { Text("إنشاء MCADDON") },
+            text = {
+                OutlinedTextField(
+                    value = addonName,
+                    onValueChange = { addonName = it },
+                    label = { Text("اسم الحزمة") },
+                    singleLine = true
                 )
             },
-            text = {
-                Column {
-                    OutlinedTextField(
-                        newPassword,
-                        { newPassword = it },
-                        label = {
-                            Text(
-                                if (isArabic)
-                                    "كلمة المرور الجديدة"
-                                else "New password"
-                            )
-                        },
-                        visualTransformation =
-                            PasswordVisualTransformation()
-                    )
-
-                    OutlinedTextField(
-                        confirmPassword,
-                        { confirmPassword = it },
-                        label = {
-                            Text(
-                                if (isArabic)
-                                    "تأكيد كلمة المرور"
-                                else "Confirm password"
-                            )
-                        },
-                        visualTransformation =
-                            PasswordVisualTransformation()
-                    )
-                }
-            },
             confirmButton = {
-                TextButton(
-                    onClick = {
-                        if (newPassword.length < 4) {
-                            toast(
-                                context,
-                                if (isArabic)
-                                    "اجعل كلمة المرور 4 أحرف على الأقل"
-                                else "Use at least 4 characters"
-                            )
-                        } else if (newPassword != confirmPassword) {
-                            toast(
-                                context,
-                                if (isArabic)
-                                    "كلمتا المرور غير متطابقتين"
-                                else "Passwords do not match"
-                            )
-                        } else {
-                            password = newPassword
-
-                            prefs.edit()
-                                .putString("password", password)
-                                .apply()
-
-                            newPassword = ""
-                            confirmPassword = ""
-                            showPasswordDialog = false
-
-                            toast(
-                                context,
-                                if (isArabic)
-                                    "تم تغيير كلمة المرور"
-                                else "Password updated"
-                            )
-                        }
-                    }
-                ) {
-                    Text(if (isArabic) "حفظ" else "Save")
-                }
+                Button(onClick = {
+                    addonDialog = false
+                    exportLauncher.launch("${addonName.ifBlank { "MC_Legend_Pack" }}.mcaddon")
+                }) { Text("تصدير") }
             },
             dismissButton = {
-                TextButton(
-                    onClick = {
-                        showPasswordDialog = false
-                    }
-                ) {
-                    Text(if (isArabic) "إلغاء" else "Cancel")
-                }
+                OutlinedButton(onClick = { addonDialog = false }) { Text("إلغاء") }
             }
         )
     }
 }
 
 @Composable
-fun CommandCard(
-    command: Command,
-    isArabic: Boolean,
-    favorite: Boolean,
-    onFavorite: () -> Unit,
+private fun PasswordPage(
+    password: String,
+    onPasswordChange: (String) -> Unit,
+    onLogin: () -> Unit,
+    english: Boolean
+) {
+    Surface(Modifier.fillMaxSize(), color = Color(0xFF090B12)) {
+        Column(
+            Modifier.fillMaxSize().padding(24.dp),
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text("MC LEGEND", color = Color(0xFFB99AFF), fontSize = 32.sp, fontWeight = FontWeight.Bold)
+            Text(
+                if (english) "Enter your password" else "أدخل كلمة المرور للدخول",
+                color = Color.White
+            )
+            Spacer(Modifier.height(12.dp))
+            OutlinedTextField(
+                value = password,
+                onValueChange = onPasswordChange,
+                label = { Text(if (english) "Password" else "كلمة المرور") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true
+            )
+            Spacer(Modifier.height(12.dp))
+            Button(onClick = onLogin, modifier = Modifier.fillMaxWidth()) {
+                Text(if (english) "Unlock" else "دخول")
+            }
+            Text(
+                if (english) "Initial password: 1234" else "كلمة المرور الأولية: 1234",
+                color = Color.Gray,
+                fontSize = 12.sp
+            )
+        }
+    }
+}
+
+@Composable
+private fun CommandTile(
+    item: LegendCommand,
+    english: Boolean,
     onCopy: () -> Unit,
+    onFavorite: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Panel
-        )
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF171B28))
     ) {
         Column(Modifier.padding(12.dp)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        command.name,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    Text(
-                        if (isArabic) command.descAr else command.desc,
-                        color = Color.Gray,
-                        fontSize = 11.sp
-                    )
-                }
-
-                TextButton(onClick = onFavorite) {
-                    Text(if (favorite) "⭐" else "☆")
-                }
-            }
-
-            Spacer(Modifier.height(5.dp))
-
-            Text(
-                command.cmd,
-                color = Green,
-                fontSize = 12.sp
-            )
-
-            Spacer(Modifier.height(7.dp))
-
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(5.dp)
-            ) {
-                Button(
-                    onClick = onCopy,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(if (isArabic) "نسخ الأمر" else "Copy")
-                }
-
-                OutlinedButton(
-                    onClick = onEdit
-                ) {
-                    Text(if (isArabic) "تعديل" else "Edit")
-                }
-
-                TextButton(onClick = onDelete) {
-                    Text(
-                        "✕",
-                        color = Color.Red
-                    )
-                }
+            Text(item.title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+            Text(item.description, color = Color.LightGray, fontSize = 12.sp)
+            Text(item.command, color = Color(0xFF65D6A3), fontSize = 14.sp)
+            Text(item.category, color = Color.Gray, fontSize = 11.sp)
+            Spacer(Modifier.height(6.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                Button(onClick = onCopy) { Text(if (english) "Copy" else "نسخ") }
+                OutlinedButton(onClick = onFavorite) { Text(if (item.favorite) "★" else "☆") }
+                OutlinedButton(onClick = onEdit) { Text(if (english) "Edit" else "تعديل") }
+                OutlinedButton(onClick = onDelete) { Text(if (english) "Delete" else "حذف") }
             }
         }
     }
 }
 
 @Composable
-fun CommandEditorDialog(
-    initial: Command?,
-    isArabic: Boolean,
+private fun CommandDialog(
+    command: LegendCommand?,
     onDismiss: () -> Unit,
-    onSave: (
-        String,
-        String,
-        String,
-        String,
-        String
-    ) -> Unit
+    onSave: (String, String, String, String) -> Unit
 ) {
-    var name by remember(initial) {
-        mutableStateOf(initial?.name ?: "")
-    }
-
-    var cmd by remember(initial) {
-        mutableStateOf(initial?.cmd ?: "/")
-    }
-
-    var desc by remember(initial) {
-        mutableStateOf(initial?.desc ?: "")
-    }
-
-    var descAr by remember(initial) {
-        mutableStateOf(initial?.descAr ?: "")
-    }
-
-    var cat by remember(initial) {
-        mutableStateOf(initial?.cat ?: "Custom")
-    }
+    var title by remember(command?.id) { mutableStateOf(command?.title ?: "") }
+    var value by remember(command?.id) { mutableStateOf(command?.command ?: "/") }
+    var description by remember(command?.id) { mutableStateOf(command?.description ?: "") }
+    var category by remember(command?.id) { mutableStateOf(command?.category ?: "عام") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = {
-            Text(
-                if (isArabic)
-                    if (initial == null) "إضافة أمر جديد"
-                    else "تعديل الأمر"
-                else
-                    if (initial == null) "Add command"
-                    else "Edit command"
-            )
-        },
+        title = { Text(if (command == null) "إضافة أمر" else "تعديل أمر") },
         text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(7.dp)
-            ) {
-                OutlinedTextField(
-                    name,
-                    { name = it },
-                    label = {
-                        Text(if (isArabic) "اسم الأمر" else "Name")
-                    },
-                    singleLine = true
-                )
-
-                OutlinedTextField(
-                    cmd,
-                    { cmd = it },
-                    label = {
-                        Text(if (isArabic) "كود الأمر" else "Command")
-                    }
-                )
-
-                OutlinedTextField(
-                    descAr,
-                    { descAr = it },
-                    label = {
-                        Text(if (isArabic) "الوصف العربي" else "Arabic description")
-                    }
-                )
-
-                OutlinedTextField(
-                    desc,
-                    { desc = it },
-                    label = {
-                        Text(if (isArabic) "الوصف الإنجليزي" else "English description")
-                    }
-                )
-
-                OutlinedTextField(
-                    cat,
-                    { cat = it },
-                    label = {
-                        Text(if (isArabic) "التصنيف" else "Category")
-                    },
-                    singleLine = true
-                )
+            Column {
+                OutlinedTextField(title, { title = it }, label = { Text("اسم الأمر") }, singleLine = true)
+                OutlinedTextField(value, { value = it }, label = { Text("صيغة الأمر") }, singleLine = true)
+                OutlinedTextField(description, { description = it }, label = { Text("الوصف") }, singleLine = true)
+                OutlinedTextField(category, { category = it }, label = { Text("التصنيف") }, singleLine = true)
             }
         },
         confirmButton = {
-            TextButton(
-                onClick = {
-                    if (
-                        name.isNotBlank() &&
-                        cmd.isNotBlank() &&
-                        cat.isNotBlank()
-                    ) {
-                        onSave(
-                            name.trim(),
-                            cmd.trim(),
-                            desc.trim(),
-                            descAr.trim(),
-                            cat.trim()
-                        )
-                    }
+            Button(onClick = {
+                if (title.isNotBlank() && value.isNotBlank()) {
+                    onSave(title.trim(), value.trim(), description.trim(), category.trim().ifBlank { "عام" })
                 }
-            ) {
-                Text(if (isArabic) "حفظ" else "Save")
+            }) { Text("حفظ") }
+        },
+        dismissButton = { OutlinedButton(onClick = onDismiss) { Text("إلغاء") } }
+    )
+}
+
+@Composable
+private fun ChangePasswordDialog(
+    onDismiss: () -> Unit,
+    onSave: (String) -> Unit
+) {
+    var first by remember { mutableStateOf("") }
+    var second by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("تغيير كلمة المرور") },
+        text = {
+            Column {
+                OutlinedTextField(first, { first = it }, label = { Text("كلمة المرور الجديدة") }, singleLine = true)
+                OutlinedTextField(second, { second = it }, label = { Text("تأكيد كلمة المرور") }, singleLine = true)
             }
         },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(if (isArabic) "إلغاء" else "Cancel")
-            }
-        }
+        confirmButton = {
+            Button(onClick = {
+                if (first.length >= 4 && first == second) onSave(first)
+            }) { Text("حفظ") }
+        },
+        dismissButton = { OutlinedButton(onClick = onDismiss) { Text("إلغاء") } }
     )
 }
 
-@Composable
-fun SectionTitle(title: String) {
-    Text(
-        title,
-        color = Purple,
-        fontSize = 19.sp,
-        fontWeight = FontWeight.Bold,
-        modifier = Modifier.padding(vertical = 9.dp)
-    )
-}
-
-@Composable
-fun EmptyMessage(message: String) {
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .padding(25.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            message,
-            color = Color.Gray
-        )
-    }
-}
-
-fun categoryLabel(cat: String, isArabic: Boolean): String {
-    if (!isArabic) return cat
-
-    return when (cat) {
-        "All" -> "الكل"
-        "Game" -> "اللعبة"
-        "Items" -> "الأدوات"
-        "World" -> "العالم"
-        "Mobs" -> "الوحوش"
-        "Effects" -> "التأثيرات"
-        "Building" -> "البناء"
-        "Custom" -> "مخصص"
-        else -> cat
-    }
-}
-
-fun toast(context: Context, message: String) {
-    Toast.makeText(
-        context,
-        message,
-        Toast.LENGTH_SHORT
-    ).show()
-}
-
-fun openUri(context: Context, uri: Uri) {
-    try {
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, "*/*")
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        context.startActivity(intent)
-    } catch (_: Exception) {
-        toast(context, "تعذر فتح الملف")
-    }
-}
-
-fun loadImported(
-    prefs: android.content.SharedPreferences
-): List<String> {
-    return prefs.getString("imported_mods", "")
-        ?.split("\n")
-        ?.filter { it.isNotBlank() }
-        ?: emptyList()
-}
-
-fun saveCommands(
-    context: Context,
-    commands: List<Command>
-) {
-    val array = JSONArray()
-
-    commands.forEach { c ->
-        val obj = JSONObject().apply {
-            put("id", c.id)
-            put("name", c.name)
-            put("cmd", c.cmd)
-            put("desc", c.desc)
-            put("descAr", c.descAr)
-            put("cat", c.cat)
-        }
-        array.put(obj)
-    }
-
-    context.getSharedPreferences(
-        "mc_legend",
-        Context.MODE_PRIVATE
-    ).edit()
-        .putString("commands", array.toString())
-        .apply()
-}
-
-fun loadCommands(context: Context): List<Command> {
-    val prefs = context.getSharedPreferences(
-        "mc_legend",
-        Context.MODE_PRIVATE
-    )
-
-    val saved = prefs.getString("commands", null)
-
-    if (saved.isNullOrBlank()) {
-        return allCommands()
-    }
-
+private fun loadCommands(context: Context): List<LegendCommand> {
+    val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_COMMANDS, null)
+        ?: return defaultCommands()
     return try {
-        val array = JSONArray(saved)
-
-        (0 until array.length()).map { index ->
-            val obj = array.getJSONObject(index)
-
-            Command(
-                obj.optString("id", UUID.randomUUID().toString()),
-                obj.optString("name"),
-                obj.optString("cmd"),
-                obj.optString("desc"),
-                obj.optString("descAr"),
-                obj.optString("cat", "Custom")
+        val array = JSONArray(raw)
+        (0 until array.length()).map { i ->
+            val item = array.getJSONObject(i)
+            LegendCommand(
+                item.optInt("id"),
+                item.optString("title"),
+                item.optString("command"),
+                item.optString("description"),
+                item.optString("category"),
+                item.optBoolean("favorite")
             )
         }
     } catch (_: Exception) {
-        allCommands()
+        defaultCommands()
     }
 }
 
-fun exportStarterAddon(
-    context: Context,
-    uri: Uri,
-    addonName: String,
-    functionName: String,
-    functionText: String
-) {
-    val packId = UUID.randomUUID().toString()
-    val moduleId = UUID.randomUUID().toString()
-
-    val safeFunction = functionName
-        .trim()
-        .ifBlank { "welcome" }
-        .replace(Regex("[^A-Za-z0-9_-]"), "_")
-
-    val manifest = """
-{
-  "format_version": 2,
-  "header": {
-    "name": "$addonName",
-    "description": "Created with MC Legend",
-    "uuid": "$packId",
-    "version": [1, 0, 0],
-    "min_engine_version": [1, 20, 0]
-  },
-  "modules": [
-    {
-      "type": "data",
-      "uuid": "$moduleId",
-      "version": [1, 0, 0]
+private fun saveCommands(context: Context, commands: List<LegendCommand>) {
+    val array = JSONArray()
+    commands.forEach { item ->
+        array.put(JSONObject().apply {
+            put("id", item.id)
+            put("title", item.title)
+            put("command", item.command)
+            put("description", item.description)
+            put("category", item.category)
+            put("favorite", item.favorite)
+        })
     }
-  ]
-}
-""".trimIndent()
-
-    context.contentResolver.openOutputStream(uri)?.use { output ->
-        ZipOutputStream(output).use { zip ->
-
-            fun addFile(name: String, content: String) {
-                zip.putNextEntry(ZipEntry(name))
-                zip.write(content.toByteArray(Charsets.UTF_8))
-                zip.closeEntry()
-            }
-
-            addFile("manifest.json", manifest)
-
-            addFile(
-                "functions/$safeFunction.mcfunction",
-                functionText
-            )
-        }
-    } ?: throw IllegalStateException("Cannot open output file")
+    context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        .edit().putString(KEY_COMMANDS, array.toString()).apply()
 }
 
-fun allCommands(): List<Command> {
-    val result = mutableListOf<Command>()
-
-    fun add(
-        name: String,
-        cmd: String,
-        desc: String,
-        descAr: String,
-        cat: String
-    ) {
-        result.add(
-            Command(
-                UUID.randomUUID().toString(),
-                name,
-                cmd,
-                desc,
-                descAr,
-                cat
-            )
-        )
+private fun loadStringList(context: Context, key: String): List<String> {
+    val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(key, null) ?: return emptyList()
+    return try {
+        val array = JSONArray(raw)
+        (0 until array.length()).map { array.optString(it) }
+    } catch (_: Exception) {
+        emptyList()
     }
+}
 
-    // الأوامر الأساسية
+private fun saveStringList(context: Context, key: String, values: List<String>) {
+    val array = JSONArray()
+    values.forEach { array.put(it) }
+    context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        .edit().putString(key, array.toString()).apply()
+}
+
+private fun defaultCommands(): List<LegendCommand> {
+    val result = mutableListOf<LegendCommand>()
+    var id = 1
+
+    fun add(title: String, command: String, description: String, category: String) {
+        result.add(LegendCommand(id++, title, command, description, category))
+    }
 
     val basics = listOf(
-        Triple("Creative", "/gamemode creative @p", "وضع الإبداع"),
-        Triple("Survival", "/gamemode survival @p", "وضع البقاء"),
-        Triple("Adventure", "/gamemode adventure @p", "وضع المغامرة"),
-        Triple("Spectator", "/gamemode spectator @p", "وضع المشاهدة"),
-        Triple("Day", "/time set day", "جعل الوقت نهاراً"),
-        Triple("Night", "/time set night", "جعل الوقت ليلاً"),
-        Triple("Noon", "/time set noon", "وقت الظهر"),
-        Triple("Midnight", "/time set midnight", "منتصف الليل"),
-        Triple("Clear Weather", "/weather clear", "طقس صاف"),
-        Triple("Rain", "/weather rain", "طقس ممطر"),
-        Triple("Thunder", "/weather thunder", "عاصفة رعدية"),
-        Triple("Set Spawn", "/setworldspawn", "تحديد نقطة البداية"),
-        Triple("Kill Self", "/kill @s", "إنهاء اللاعب"),
-        Triple("Heal", "/effect @p regeneration 30 2 true", "علاج اللاعب"),
-        Triple("Clear Inventory", "/clear @p", "تنظيف الحقيبة"),
-        Triple("Locate Village", "/locate structure village", "البحث عن قرية"),
-        Triple("Locate Mansion", "/locate structure mansion", "البحث عن قصر"),
-        Triple("Locate Stronghold", "/locate structure stronghold", "البحث عن معقل"),
-        Triple("Locate Ancient City", "/locate structure ancient_city", "البحث عن مدينة قديمة"),
-        Triple("Teleport Home", "/tp @p 0 100 0", "الانتقال إلى نقطة المنزل"),
-        Triple("Show Coordinates", "/gamerule showcoordinates true", "إظهار الإحداثيات"),
-        Triple("Keep Inventory", "/gamerule keepinventory true", "الاحتفاظ بالأغراض"),
-        Triple("Disable Fire", "/gamerule firedamage false", "إيقاف ضرر النار"),
-        Triple("Disable Mob Griefing", "/gamerule mobgriefing false", "منع تخريب الوحوش"),
-        Triple("Disable Day Cycle", "/gamerule dodaylightcycle false", "تثبيت دورة النهار")
+        listOf("إبداع", "/gamemode creative", "تغيير نمط اللعب", "اللعب"),
+        listOf("بقاء", "/gamemode survival", "تغيير نمط اللعب", "اللعب"),
+        listOf("مغامرة", "/gamemode adventure", "تغيير نمط اللعب", "اللعب"),
+        listOf("نهار", "/time set day", "تغيير الوقت إلى النهار", "العالم"),
+        listOf("ليل", "/time set night", "تغيير الوقت إلى الليل", "العالم"),
+        listOf("شروق", "/time set sunrise", "تغيير الوقت", "العالم"),
+        listOf("غروب", "/time set sunset", "تغيير الوقت", "العالم"),
+        listOf("طقس صافٍ", "/weather clear", "إيقاف المطر", "العالم"),
+        listOf("مطر", "/weather rain", "تشغيل المطر", "العالم"),
+        listOf("عاصفة رعدية", "/weather thunder", "تشغيل العاصفة", "العالم"),
+        listOf("قتل اللاعب", "/kill @s", "إنهاء اللاعب الحالي", "اللعب"),
+        listOf("قتل الكل", "/kill @e", "حذف الكائنات", "العالم"),
+        listOf("إحداثيات", "/gamerule showcoordinates true", "إظهار الإحداثيات", "العالم"),
+        listOf("إخفاء الإحداثيات", "/gamerule showcoordinates false", "إخفاء الإحداثيات", "العالم"),
+        listOf("حفظ المخزون", "/gamerule keepinventory true", "الاحتفاظ بالأغراض بعد الموت", "العالم"),
+        listOf("إيقاف حفظ المخزون", "/gamerule keepinventory false", "إيقاف الاحتفاظ بالأغراض", "العالم"),
+        listOf("إيقاف انتشار النار", "/gamerule dofiretick false", "منع انتشار النار", "العالم"),
+        listOf("تشغيل انتشار النار", "/gamerule dofiretick true", "السماح بانتشار النار", "العالم"),
+        listOf("إيقاف ظهور الوحوش", "/gamerule domobspawning false", "منع ظهور الوحوش", "العالم"),
+        listOf("تشغيل ظهور الوحوش", "/gamerule domobspawning true", "السماح بظهور الوحوش", "العالم"),
+        listOf("إيقاف دورة النهار", "/gamerule dodaylightcycle false", "تثبيت الوقت", "العالم"),
+        listOf("تشغيل دورة النهار", "/gamerule dodaylightcycle true", "إعادة دورة الوقت", "العالم"),
+        listOf("إيقاف الطقس", "/gamerule doweathercycle false", "تثبيت الطقس", "العالم"),
+        listOf("تشغيل الطقس", "/gamerule doweathercycle true", "إعادة تغير الطقس", "العالم"),
+        listOf("رسالة للجميع", "/say مرحباً", "إرسال رسالة في الدردشة", "الدردشة"),
+        listOf("عنوان للاعب", "/title @p title مرحباً", "إظهار عنوان", "الدردشة"),
+        listOf("عنوان فرعي", "/title @p subtitle أهلاً", "إظهار عنوان فرعي", "الدردشة"),
+        listOf("مسح الدردشة", "/clear @p", "مسح أغراض اللاعب", "الأدوات"),
+        listOf("إعادة الظهور", "/spawnpoint @p", "تحديد نقطة الظهور", "اللعب"),
+        listOf("نقطة العالم", "/setworldspawn", "تحديد ظهور العالم", "العالم"),
+        listOf("شفاء", "/effect @p instant_health 1 1", "استعادة الصحة", "التأثيرات"),
+        listOf("سرعة", "/effect @p speed 60 1", "زيادة السرعة", "التأثيرات"),
+        listOf("قفز", "/effect @p jump_boost 60 2", "زيادة القفز", "التأثيرات"),
+        listOf("قوة", "/effect @p strength 60 1", "زيادة قوة الضرب", "التأثيرات"),
+        listOf("مقاومة", "/effect @p resistance 60 1", "زيادة المقاومة", "التأثيرات"),
+        listOf("تنفس الماء", "/effect @p water_breathing 120 1", "التنفس تحت الماء", "التأثيرات"),
+        listOf("رؤية ليلية", "/effect @p night_vision 120 1", "الرؤية في الظلام", "التأثيرات"),
+        listOf("إزالة التأثيرات", "/effect @p clear", "إزالة التأثيرات", "التأثيرات"),
+        listOf("تحديد صعوبة سهلة", "/difficulty easy", "تغيير الصعوبة", "العالم"),
+        listOf("تحديد صعوبة عادية", "/difficulty normal", "تغيير الصعوبة", "العالم"),
+        listOf("تحديد صعوبة صعبة", "/difficulty hard", "تغيير الصعوبة", "العالم"),
+        listOf("بحث عن قرية", "/locate structure village", "البحث عن قرية قريبة", "الاستكشاف"),
+        listOf("بحث عن معبد", "/locate structure temple", "البحث عن معبد", "الاستكشاف"),
+        listOf("بحث عن حصن", "/locate structure stronghold", "البحث عن حصن", "الاستكشاف"),
+        listOf("حفظ العالم", "/save-all", "حفظ بيانات العالم إن كان مدعوماً", "العالم"),
+        listOf("تجربة للاعب", "/xp 100 @p", "إضافة خبرة", "اللعب"),
+        listOf("انتقال للأعلى", "/tp @p ~ ~10 ~", "الانتقال عشرة بلوكات للأعلى", "اللعب"),
+        listOf("انتقال للأسفل", "/tp @p ~ ~-10 ~", "الانتقال عشرة بلوكات للأسفل", "اللعب"),
+        listOf("انتقال للأمام", "/tp @p ~ ~ ~10", "الانتقال للأمام", "اللعب"),
+        listOf("انتقال للخلف", "/tp @p ~ ~ ~-10", "الانتقال للخلف", "اللعب"),
+        listOf("تحديد وقت الظهر", "/time set noon", "ضبط الوقت إلى الظهر", "العالم"),
+        listOf("تحديد وقت منتصف الليل", "/time set midnight", "ضبط الوقت إلى منتصف الليل", "العالم"),
+        listOf("تفعيل القتل", "/gamerule pvp true", "السماح بالقتال بين اللاعبين", "العالم"),
+        listOf("إيقاف القتل", "/gamerule pvp false", "منع القتال بين اللاعبين", "العالم"),
+        listOf("إعطاء تفاحة", "/give @p apple 16", "الحصول على 16 تفاحة", "الأدوات"),
+        listOf("إعطاء خبز", "/give @p bread 16", "الحصول على 16 قطعة خبز", "الأدوات")
     )
-
-    basics.forEach {
-        add(it.first, it.second, it.third, it.third, "Game")
-    }
-
-    // التأثيرات
-
-    val effects = listOf(
-        "speed", "slowness", "haste", "mining_fatigue",
-        "strength", "instant_health", "instant_damage",
-        "jump_boost", "nausea", "regeneration",
-        "resistance", "fire_resistance", "water_breathing",
-        "invisibility", "blindness", "night_vision",
-        "hunger", "weakness", "poison", "wither",
-        "health_boost", "absorption", "saturation",
-        "levitation", "slow_falling", "conduit_power",
-        "dolphins_grace", "bad_omen", "hero_of_the_village",
-        "darkness"
-    )
-
-    effects.forEach { effect ->
-        for (level in 1..3) {
-            add(
-                "$effect Level $level",
-                "/effect @p $effect 60 $level true",
-                "Apply $effect",
-                "تأثير $effect المستوى $level",
-                "Effects"
-            )
-        }
-    }
-
-    // الأدوات والأغراض
+    basics.forEach { add(it[0], it[1], it[2], it[3]) }
 
     val items = listOf(
-        "diamond", "emerald", "gold_ingot", "iron_ingot",
-        "netherite_ingot", "coal", "redstone", "lapis_lazuli",
-        "amethyst_shard", "quartz", "apple", "golden_apple",
-        "enchanted_golden_apple", "bread", "cooked_beef",
-        "cooked_chicken", "cooked_porkchop", "golden_carrot",
-        "diamond_sword", "diamond_pickaxe", "diamond_axe",
-        "diamond_shovel", "diamond_hoe", "netherite_sword",
-        "netherite_pickaxe", "netherite_axe", "bow", "crossbow",
-        "arrow", "shield", "trident", "totem_of_undying",
-        "elytra", "fishing_rod", "flint_and_steel",
-        "ender_pearl", "ender_eye", "experience_bottle",
-        "obsidian", "crying_obsidian", "tnt", "torch",
-        "lantern", "beacon", "anvil", "enchanting_table",
-        "crafting_table", "ender_chest", "chest", "hopper",
-        "diamond_block", "gold_block", "iron_block",
-        "emerald_block", "netherite_block"
+        "diamond", "iron_ingot", "gold_ingot", "emerald", "netherite_ingot",
+        "coal", "redstone", "lapis_lazuli", "copper_ingot", "amethyst_shard",
+        "iron_sword", "diamond_sword", "netherite_sword", "bow", "crossbow",
+        "trident", "shield", "arrow", "iron_pickaxe", "diamond_pickaxe",
+        "netherite_pickaxe", "iron_axe", "diamond_axe", "netherite_axe",
+        "iron_shovel", "diamond_shovel", "iron_hoe", "diamond_hoe",
+        "diamond_helmet", "diamond_chestplate", "diamond_leggings", "diamond_boots",
+        "netherite_helmet", "netherite_chestplate", "netherite_leggings", "netherite_boots",
+        "elytra", "totem_of_undying", "golden_apple", "enchanted_golden_apple",
+        "ender_pearl", "ender_eye", "experience_bottle", "firework_rocket",
+        "obsidian", "crying_obsidian", "ancient_debris", "glowstone", "sea_lantern",
+        "torch", "lantern", "crafting_table", "furnace", "anvil", "enchanting_table",
+        "chest", "ender_chest", "hopper", "beacon", "shulker_box", "totem_of_undying",
+        "bread", "cooked_beef", "golden_carrot", "potion", "water_bucket",
+        "lava_bucket", "milk_bucket", "saddle", "name_tag", "lead", "map"
     )
-
     items.forEach { item ->
-        add(
-            "Give $item",
-            "/give @p $item 16",
-            "Get 16 $item",
-            "الحصول على 16 من $item",
-            "Items"
-        )
+        add("إعطاء $item", "/give @p $item 1", "الحصول على عنصر $item", "الأدوات")
     }
 
-    // استدعاء الوحوش والحيوانات
-
-    val mobs = listOf(
-        "zombie", "skeleton", "creeper", "spider",
-        "cave_spider", "enderman", "witch", "blaze",
-        "ghast", "slime", "magma_cube", "phantom",
-        "drowned", "husk", "stray", "pillager",
-        "ravager", "vindicator", "evoker", "vex",
-        "warden", "wither", "ender_dragon", "iron_golem",
-        "snow_golem", "villager", "wandering_trader",
-        "cow", "sheep", "pig", "chicken", "horse",
-        "wolf", "cat", "ocelot", "rabbit", "fox",
-        "bee", "dolphin", "turtle", "panda",
-        "polar_bear", "llama", "goat", "camel"
+    val effects = listOf(
+        "speed", "slowness", "haste", "mining_fatigue", "strength",
+        "instant_health", "instant_damage", "jump_boost", "nausea", "regeneration",
+        "resistance", "fire_resistance", "water_breathing", "invisibility",
+        "blindness", "night_vision", "hunger", "weakness", "poison",
+        "wither", "health_boost", "absorption", "saturation", "levitation",
+        "slow_falling", "conduit_power", "dolphins_grace", "bad_omen",
+        "hero_of_the_village", "darkness"
     )
-
-    mobs.forEach { mob ->
-        add(
-            "Summon $mob",
-            "/summon $mob ~ ~ ~",
-            "Summon $mob",
-            "استدعاء $mob",
-            "Mobs"
-        )
+    effects.forEach { effect ->
+        add("تأثير $effect", "/effect @p $effect 60 1", "تطبيق تأثير $effect لمدة 60 ثانية", "التأثيرات")
     }
 
-    // أوامر البناء
-
-    val blocks = listOf(
-        "stone", "cobblestone", "dirt", "grass_block",
-        "sand", "glass", "oak_planks", "spruce_planks",
-        "birch_planks", "jungle_planks", "acacia_planks",
-        "dark_oak_planks", "mangrove_planks",
-        "cherry_planks", "bricks", "stone_bricks",
-        "obsidian", "glowstone", "sea_lantern",
-        "diamond_block", "gold_block", "iron_block",
-        "emerald_block", "netherite_block",
-        "crafting_table", "furnace", "chest",
-        "barrel", "bookshelf", "lantern", "white_wool",
-        "red_wool", "blue_wool", "tnt", "hay_block",
-        "slime_block", "honey_block"
+    val enchantments = listOf(
+        "sharpness", "smite", "bane_of_arthropods", "knockback", "fire_aspect",
+        "looting", "efficiency", "silk_touch", "unbreaking", "fortune",
+        "power", "punch", "flame", "infinity", "protection",
+        "fire_protection", "blast_protection", "projectile_protection",
+        "feather_falling", "respiration", "aqua_affinity", "thorns",
+        "depth_strider", "frost_walker", "mending"
     )
-
-    blocks.forEach { block ->
-        add(
-            "Place $block",
-            "/setblock ~ ~-1 ~ $block",
-            "Place block below you",
-            "وضع الكتلة أسفلك: $block",
-            "Building"
-        )
+    enchantments.forEach { enchant ->
+        add("تعويذة $enchant", "/enchant @p $enchant 1", "تطبيق تعويذة $enchant على الأداة المناسبة", "التعويذات")
     }
 
-    // قواعد اللعبة
-
-    val rules = listOf(
-        "keepinventory",
-        "mobgriefing",
-        "dodaylightcycle",
-        "doweathercycle",
-        "domobspawning",
-        "naturalregeneration",
-        "falldamage",
-        "firedamage",
-        "drowningdamage",
-        "tntexplodes",
-        "showcoordinates",
-        "pvp",
-        "doentitydrops",
-        "mobloot",
-        "sendcommandfeedback"
+    val eggs = listOf(
+        "zombie", "skeleton", "creeper", "spider", "enderman", "witch",
+        "slime", "cow", "pig", "sheep", "chicken", "horse", "wolf",
+        "cat", "villager", "iron_golem", "snow_golem", "warden",
+        "allay", "axolotl", "bee", "fox", "goat", "camel", "frog",
+        "turtle", "dolphin", " panda", "parrot", "rabbit"
     )
+    eggs.forEach { mob ->
+        val idName = mob.trim()
+        add("بيضة استدعاء $idName", "/give @p ${idName}_spawn_egg 1", "الحصول على بيضة استدعاء $idName", "الأدوات")
+    }
 
-    rules.forEach { rule ->
-        listOf("true", "false").forEach { value ->
-            add(
-                "$rule $value",
-                "/gamerule $rule $value",
-                "Change gamerule",
-                "تغيير قاعدة اللعبة $rule إلى $value",
-                "World"
-            )
-        }
+    val gamerules = listOf(
+        "mobgriefing true", "mobgriefing false",
+        "pvp true", "pvp false",
+        "falldamage true", "falldamage false",
+        "firedamage true", "firedamage false",
+        "tntexplodes true", "tntexplodes false",
+        "commandblocksenabled true", "commandblocksenabled false",
+        "naturalregeneration true", "naturalregeneration false",
+        "drowningdamage true", "drowningdamage false",
+        "freezedamage true", "freezedamage false"
+    )
+    gamerules.forEach { rule ->
+        add("قاعدة $rule", "/gamerule $rule", "تغيير قاعدة العالم $rule", "العالم")
     }
 
     return result
+}
+
+private fun copyCommand(context: Context, command: String) {
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    clipboard.setPrimaryClip(ClipData.newPlainText("Minecraft command", command))
+    toast(context, "تم نسخ الأمر")
+}
+
+private fun openMinecraft(context: Context) {
+    val intent = context.packageManager.getLaunchIntentForPackage("com.mojang.minecraftpe")
+    if (intent != null) {
+        context.startActivity(intent)
+    } else {
+        toast(context, "لم يتم العثور على Minecraft على الجهاز")
+    }
+}
+
+private fun toast(context: Context, message: String) {
+    Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+}
+
+private fun getDisplayName(context: Context, uri: Uri): String {
+    var name = "minecraft_pack.mcpack"
+    context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+        val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+        if (index >= 0 && cursor.moveToFirst()) name = cursor.getString(index) ?: name
+    }
+    return name
+}
+
+private fun exportBehaviorPack(context: Context, uri: Uri, packName: String) {
+    val manifest = JSONObject().apply {
+        put("format_version", 2)
+        put("header", JSONObject().apply {
+            put("name", packName)
+            put("description", "Created with MC Legend")
+            put("uuid", UUID.randomUUID().toString())
+            put("version", JSONArray().put(1).put(0).put(0))
+            put("min_engine_version", JSONArray().put(1).put(20).put(0))
+        })
+        put("modules", JSONArray().put(JSONObject().apply {
+            put("type", "data")
+            put("description", "MC Legend starter behavior pack")
+            put("uuid", UUID.randomUUID().toString())
+            put("version", JSONArray().put(1).put(0).put(0))
+        }))
+    }
+
+    val output = context.contentResolver.openOutputStream(uri)
+        ?: throw IllegalStateException("تعذر فتح ملف التصدير")
+    ZipOutputStream(output).use { zip ->
+        zip.putNextEntry(ZipEntry("manifest.json"))
+        zip.write(manifest.toString(2).toByteArray(Charsets.UTF_8))
+        zip.closeEntry()
+
+        zip.putNextEntry(ZipEntry("README.txt"))
+        zip.write(
+            ("MC Legend starter Behavior Pack\n" +
+             "This is a starter pack structure. Add behavior files and valid JSON definitions to extend it.\n")
+                .toByteArray(Charsets.UTF_8)
+        )
+        zip.closeEntry()
+    }
 }
