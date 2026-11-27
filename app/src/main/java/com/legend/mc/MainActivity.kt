@@ -1,4 +1,3 @@
-
 package com.legend.mc
 
 import android.os.Bundle
@@ -6,14 +5,47 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -31,11 +63,78 @@ private val Gold = Color(0xFFFFC857)
 private val WhiteText = Color(0xFFF2F5F2)
 private val GrayText = Color(0xFF9EAAA2)
 
+private data class MCCommand(
+    val name: String,
+    val command: String,
+    val category: String,
+    val description: String,
+    val keywords: List<String> = emptyList()
+)
+
+private val commandLibrary = listOf(
+    MCCommand(
+        name = "الانتقال إلى لاعب",
+        command = "/tp @s Player",
+        category = "الانتقال",
+        description = "ينقلك إلى اللاعب الذي تستبدل Player باسمه.",
+        keywords = listOf("انتقال", "لاعب", "teleport", "tp")
+    ),
+    MCCommand(
+        name = "تغيير الوقت إلى النهار",
+        command = "/time set day",
+        category = "الوقت",
+        description = "يجعل الوقت نهارًا.",
+        keywords = listOf("نهار", "صباح", "day", "time")
+    ),
+    MCCommand(
+        name = "تغيير الوقت إلى الليل",
+        command = "/time set night",
+        category = "الوقت",
+        description = "يجعل الوقت ليلًا.",
+        keywords = listOf("ليل", "مساء", "night", "time")
+    ),
+    MCCommand(
+        name = "إزالة المطر",
+        command = "/weather clear",
+        category = "الطقس",
+        description = "يجعل الطقس صافيًا ويوقف المطر.",
+        keywords = listOf("طقس", "مطر", "صافي", "weather", "clear")
+    ),
+    MCCommand(
+        name = "الحصول على ألماس",
+        command = "/give @s diamond 64",
+        category = "الأدوات",
+        description = "يعطيك 64 قطعة ألماس. قد تحتاج إلى تفعيل الغش في العالم.",
+        keywords = listOf("ألماس", "الماس", "دايموند", "diamond", "give")
+    ),
+    MCCommand(
+        name = "تفعيل الطيران",
+        command = "/ability @s mayfly true",
+        category = "القدرات",
+        description = "يسمح بالطيران في الإصدارات التي تدعم هذا الأمر.",
+        keywords = listOf("طيران", "اطير", "fly", "mayfly", "ability")
+    ),
+    MCCommand(
+        name = "استدعاء قروي",
+        command = "/summon villager",
+        category = "القرويون",
+        description = "يستدعي قرويًا في موقعك.",
+        keywords = listOf("قروي", "قرويين", "villager", "summon")
+    ),
+    MCCommand(
+        name = "تغيير وضع اللعب إلى الإبداعي",
+        command = "/gamemode creative",
+        category = "القدرات",
+        description = "يغيّر وضع اللعب إلى الإبداعي.",
+        keywords = listOf("إبداعي", "كرييتف", "creative", "gamemode")
+    )
+)
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            MCTheme {
+            MCLegendTheme {
                 MCApp()
             }
         }
@@ -43,7 +142,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun MCTheme(content: @Composable () -> Unit) {
+private fun MCLegendTheme(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = darkColorScheme(
             primary = Emerald,
@@ -58,67 +157,17 @@ fun MCTheme(content: @Composable () -> Unit) {
     )
 }
 
-data class MCCommand(
-    val name: String,
-    val command: String,
-    val category: String,
-    val description: String
-)
-
-private val commands = listOf(
-    MCCommand(
-        "الانتقال إلى لاعب",
-        "/tp @s Player",
-        "الانتقال",
-        "ينقلك إلى اللاعب الذي تحدد اسمه."
-    ),
-    MCCommand(
-        "تغيير الوقت إلى النهار",
-        "/time set day",
-        "الوقت",
-        "يجعل الوقت نهارًا."
-    ),
-    MCCommand(
-        "تغيير الوقت إلى الليل",
-        "/time set night",
-        "الوقت",
-        "يجعل الوقت ليلًا."
-    ),
-    MCCommand(
-        "تغيير الطقس",
-        "/weather clear",
-        "الطقس",
-        "يجعل الطقس صافيًا."
-    ),
-    MCCommand(
-        "الحصول على ألماس",
-        "/give @s diamond 64",
-        "الأدوات",
-        "يعطيك 64 قطعة ألماس."
-    ),
-    MCCommand(
-        "الطيران",
-        "/ability @s mayfly true",
-        "القدرات",
-        "يسمح بالطيران في الإصدارات التي تدعم هذا الأمر."
-    ),
-    MCCommand(
-        "استدعاء قروي",
-        "/summon villager",
-        "القرويون",
-        "يستدعي قرويًا في موقعك."
-    ),
-    MCCommand(
-        "تغيير وضع اللعب",
-        "/gamemode creative",
-        "القدرات",
-        "يغير وضع اللعب إلى الإبداعي."
-    )
-)
-
 @Composable
-fun MCApp() {
-    var selectedTab by remember { mutableIntStateOf(0) }
+private fun MCApp() {
+    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+
+    val tabs = listOf(
+        Triple("الرئيسية", "⌂", 0),
+        Triple("الأوامر", "⌘", 1),
+        Triple("المساعد", "✦", 2),
+        Triple("العالم", "🌍", 3),
+        Triple("المزيد", "☰", 4)
+    )
 
     Scaffold(
         containerColor = DarkBackground,
@@ -127,24 +176,12 @@ fun MCApp() {
                 containerColor = CardColor,
                 contentColor = WhiteText
             ) {
-                val tabs = listOf(
-                    Triple("الرئيسية", "⌂", 0),
-                    Triple("الأوامر", "⌘", 1),
-                    Triple("المساعد", "✦", 2),
-                    Triple("العالم", "🌍", 3),
-                    Triple("المزيد", "☰", 4)
-                )
-
                 tabs.forEach { tab ->
                     NavigationBarItem(
                         selected = selectedTab == tab.third,
                         onClick = { selectedTab = tab.third },
-                        icon = {
-                            Text(tab.second, fontSize = 21.sp)
-                        },
-                        label = {
-                            Text(tab.first, fontSize = 10.sp)
-                        },
+                        icon = { Text(tab.second, fontSize = 21.sp) },
+                        label = { Text(tab.first, fontSize = 10.sp) },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = Emerald,
                             selectedTextColor = Emerald,
@@ -156,31 +193,25 @@ fun MCApp() {
                 }
             }
         }
-    ) { padding ->
+    ) { innerPadding ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
+                .padding(innerPadding)
         ) {
             when (selectedTab) {
-                0 -> HomeScreen(
-                    onNavigate = { selectedTab = it }
-                )
+                0 -> HomeScreen(onNavigate = { selectedTab = it })
                 1 -> CommandsScreen()
                 2 -> AssistantScreen()
                 3 -> WorldScreen()
-                4 -> MoreScreen(
-                    onNavigate = { selectedTab = it }
-                )
+                4 -> MoreScreen()
             }
         }
     }
 }
 
 @Composable
-fun Header(
-    subtitle: String = "عالمك الأسطوري يبدأ هنا"
-) {
+private fun Header(subtitle: String) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -191,36 +222,29 @@ fun Header(
             modifier = Modifier
                 .size(76.dp)
                 .background(
-                    Emerald.copy(alpha = 0.13f),
-                    RoundedCornerShape(22.dp)
+                    color = Emerald.copy(alpha = 0.13f),
+                    shape = RoundedCornerShape(22.dp)
                 ),
             contentAlignment = Alignment.Center
         ) {
             Text("◆", color = Emerald, fontSize = 48.sp)
         }
-
         Spacer(Modifier.height(8.dp))
-
         Text(
-            "MC LEGEND",
+            text = "MC LEGEND",
             color = Gold,
             fontSize = 29.sp,
             fontWeight = FontWeight.Black,
             letterSpacing = 2.sp
         )
-
-        Text(
-            subtitle,
-            color = GrayText,
-            fontSize = 13.sp
-        )
+        Text(subtitle, color = GrayText, fontSize = 13.sp)
     }
 }
 
 @Composable
-fun SectionTitle(title: String) {
+private fun SectionTitle(title: String) {
     Text(
-        title,
+        text = title,
         color = Gold,
         fontSize = 18.sp,
         fontWeight = FontWeight.Bold,
@@ -229,7 +253,7 @@ fun SectionTitle(title: String) {
 }
 
 @Composable
-fun FeatureCard(
+private fun FeatureCard(
     emoji: String,
     title: String,
     description: String,
@@ -239,11 +263,9 @@ fun FeatureCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 6.dp)
-            .clickable { onClick() },
+            .clickable(onClick = onClick),
         shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = CardColor
-        )
+        colors = CardDefaults.cardColors(containerColor = CardColor)
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
@@ -253,16 +275,14 @@ fun FeatureCard(
                 modifier = Modifier
                     .size(52.dp)
                     .background(
-                        Emerald.copy(alpha = 0.12f),
-                        RoundedCornerShape(15.dp)
+                        color = Emerald.copy(alpha = 0.12f),
+                        shape = RoundedCornerShape(15.dp)
                     ),
                 contentAlignment = Alignment.Center
             ) {
                 Text(emoji, fontSize = 26.sp)
             }
-
             Spacer(Modifier.width(14.dp))
-
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     title,
@@ -271,34 +291,24 @@ fun FeatureCard(
                     fontSize = 16.sp
                 )
                 Spacer(Modifier.height(4.dp))
-                Text(
-                    description,
-                    color = GrayText,
-                    fontSize = 12.sp
-                )
+                Text(description, color = GrayText, fontSize = 12.sp)
             }
-
             Text("‹", color = Emerald, fontSize = 27.sp)
         }
     }
 }
 
 @Composable
-fun HomeScreen(onNavigate: (Int) -> Unit) {
+private fun HomeScreen(onNavigate: (Int) -> Unit) {
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .padding(horizontal = 18.dp)
     ) {
-        item {
-            Header("مرحبًا بك في عالم الأساطير")
-        }
-
+        item { Header("مرحبًا بك في عالم الأساطير") }
         item {
             Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = Color(0xFF15382A)
-                ),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF15382A)),
                 shape = RoundedCornerShape(22.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -318,20 +328,14 @@ fun HomeScreen(onNavigate: (Int) -> Unit) {
                     Spacer(Modifier.height(15.dp))
                     Button(
                         onClick = { onNavigate(1) },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Emerald
-                        )
+                        colors = ButtonDefaults.buttonColors(containerColor = Emerald)
                     ) {
-                        Text("اكتشف الأوامر")
+                        Text("اكتشف الأوامر", color = Color.Black)
                     }
                 }
             }
         }
-
-        item {
-            SectionTitle("اكتشف أقسام التطبيق")
-        }
-
+        item { SectionTitle("اكتشف أقسام التطبيق") }
         item {
             FeatureCard(
                 "⌘",
@@ -339,15 +343,13 @@ fun HomeScreen(onNavigate: (Int) -> Unit) {
                 "أوامر ماين كرافت مع الشرح والنسخ"
             ) { onNavigate(1) }
         }
-
         item {
             FeatureCard(
                 "✦",
-                "المساعد الذكي",
-                "تعرف على الأوامر وطريقة استخدامها"
+                "المساعد الأسطوري",
+                "اسأل عن الأوامر وطريقة استخدامها"
             ) { onNavigate(2) }
         }
-
         item {
             FeatureCard(
                 "🌍",
@@ -355,23 +357,20 @@ fun HomeScreen(onNavigate: (Int) -> Unit) {
                 "أفكار مغامرات وتحديات جديدة"
             ) { onNavigate(3) }
         }
-
         item {
             FeatureCard(
-                "🧑",
+                "🧑‍🌾",
                 "القرويون والتجارة",
                 "تعرف على المهن والصفقات"
             ) { onNavigate(4) }
         }
-
         item {
             FeatureCard(
                 "🎨",
                 "السكنات والموارد",
-                "اكتشف تخصيصات عالمك"
+                "قسم مخصص للسكنات وحزم الموارد"
             ) { onNavigate(4) }
         }
-
         item {
             Spacer(Modifier.height(20.dp))
             Text(
@@ -386,20 +385,21 @@ fun HomeScreen(onNavigate: (Int) -> Unit) {
 }
 
 @Composable
-fun CommandsScreen() {
-    var search by remember { mutableStateOf("") }
-    var category by remember { mutableStateOf("الكل") }
+private fun CommandsScreen() {
+    var search by rememberSaveable { mutableStateOf("") }
+    var selectedCategory by rememberSaveable { mutableStateOf("الكل") }
     val clipboard = LocalClipboardManager.current
 
     val categories = listOf(
-        "الكل", "الانتقال", "الوقت", "الطقس",
-        "الأدوات", "القدرات", "القرويون"
+        "الكل", "الانتقال", "الوقت", "الطقس", "الأدوات", "القدرات", "القرويون"
     )
-
-    val filtered = commands.filter {
-        (category == "الكل" || it.category == category) &&
-        (it.name.contains(search, ignoreCase = true) ||
-         it.command.contains(search, ignoreCase = true))
+    val filteredCommands = commandLibrary.filter { command ->
+        val matchesCategory = selectedCategory == "الكل" ||
+            command.category == selectedCategory
+        val matchesSearch = command.name.contains(search, ignoreCase = true) ||
+            command.command.contains(search, ignoreCase = true) ||
+            command.description.contains(search, ignoreCase = true)
+        matchesCategory && matchesSearch
     }
 
     Column(
@@ -408,7 +408,6 @@ fun CommandsScreen() {
             .padding(horizontal = 16.dp)
     ) {
         Header("مكتبة أوامر ماين كرافت")
-
         OutlinedTextField(
             value = search,
             onValueChange = { search = it },
@@ -417,79 +416,37 @@ fun CommandsScreen() {
             singleLine = true,
             shape = RoundedCornerShape(15.dp)
         )
-
         Spacer(Modifier.height(10.dp))
-
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
         ) {
-            categories.forEach {
+            categories.forEach { category ->
                 FilterChip(
-                    selected = category == it,
-                    onClick = { category = it },
-                    label = { Text(it) },
-                    modifier = Modifier.padding(end = 5.dp)
+                    selected = selectedCategory == category,
+                    onClick = { selectedCategory = category },
+                    label = { Text(category) }
                 )
             }
         }
-
+        Spacer(Modifier.height(8.dp))
         LazyColumn(
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            items(filtered) { command ->
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 6.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = CardColor
-                    ),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Column(Modifier.padding(15.dp)) {
-                        Text(
-                            command.name,
-                            color = Gold,
-                            fontWeight = FontWeight.Bold
-                        )
-
-                        Spacer(Modifier.height(7.dp))
-
-                        Text(
-                            command.command,
-                            color = Emerald,
-                            fontSize = 14.sp
-                        )
-
-                        Spacer(Modifier.height(5.dp))
-
-                        Text(
-                            command.description,
-                            color = GrayText,
-                            fontSize = 12.sp
-                        )
-
-                        Spacer(Modifier.height(10.dp))
-
-                        Button(
-                            onClick = {
-                                clipboard.setText(
-                                    AnnotatedString(command.command)
-                                )
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Emerald
-                            )
-                        ) {
-                            Text("نسخ الأمر")
-                        }
+            items(filteredCommands, key = { it.command }) { command ->
+                CommandCard(
+                    command = command,
+                    onCopy = {
+                        clipboard.setText(AnnotatedString(command.command))
                     }
-                }
+                )
             }
-
-            if (filtered.isEmpty()) {
+            if (filteredCommands.isEmpty()) {
                 item {
                     Text(
                         "لا توجد أوامر مطابقة للبحث.",
@@ -503,9 +460,33 @@ fun CommandsScreen() {
 }
 
 @Composable
-fun AssistantScreen() {
-    var question by remember { mutableStateOf("") }
-    var answer by remember { mutableStateOf("") }
+private fun CommandCard(command: MCCommand, onCopy: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = CardColor),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Column(Modifier.padding(15.dp)) {
+            Text(command.name, color = Gold, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(7.dp))
+            Text(command.command, color = Emerald, fontSize = 14.sp)
+            Spacer(Modifier.height(5.dp))
+            Text(command.description, color = GrayText, fontSize = 12.sp)
+            Spacer(Modifier.height(10.dp))
+            Button(
+                onClick = onCopy,
+                colors = ButtonDefaults.buttonColors(containerColor = Emerald)
+            ) {
+                Text("نسخ الأمر", color = Color.Black)
+            }
+        }
+    }
+}
+
+@Composable
+private fun AssistantScreen() {
+    var question by rememberSaveable { mutableStateOf("") }
+    var answer by rememberSaveable { mutableStateOf("") }
 
     Column(
         modifier = Modifier
@@ -514,11 +495,8 @@ fun AssistantScreen() {
             .padding(18.dp)
     ) {
         Header("المساعد الأسطوري")
-
         Card(
-            colors = CardDefaults.cardColors(
-                containerColor = CardColor
-            ),
+            colors = CardDefaults.cardColors(containerColor = CardColor),
             shape = RoundedCornerShape(20.dp)
         ) {
             Column(Modifier.padding(18.dp)) {
@@ -528,78 +506,76 @@ fun AssistantScreen() {
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold
                 )
-
                 Spacer(Modifier.height(8.dp))
-
                 Text(
-                    "اكتب اسم الأمر أو ما تريد فعله في ماين كرافت، وسأعرض لك شرحًا من المكتبة المحلية.",
+                    "اكتب ما تريد فعله في ماين كرافت، وسأبحث لك في مكتبة الشروحات المحلية.",
                     color = GrayText
                 )
-
                 Spacer(Modifier.height(15.dp))
-
                 OutlinedTextField(
                     value = question,
                     onValueChange = { question = it },
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text("مثال: كيف أحصل على ألماس؟") }
                 )
-
                 Spacer(Modifier.height(12.dp))
-
                 Button(
                     onClick = {
-                        val found = commands.filter {
-                            it.name.contains(question, true) ||
-                            it.description.contains(question, true) ||
-                            it.command.contains(question, true)
+                        val query = question.trim()
+                        val found = if (query.isBlank()) {
+                            emptyList()
+                        } else {
+                            commandLibrary.filter { command ->
+                                command.name.contains(query, ignoreCase = true) ||
+                                    command.description.contains(query, ignoreCase = true) ||
+                                    command.command.contains(query, ignoreCase = true) ||
+                                    command.keywords.any { keyword ->
+                                        query.contains(keyword, ignoreCase = true) ||
+                                            keyword.contains(query, ignoreCase = true)
+                                    }
+                            }
                         }
-
-                        answer = if (found.isNotEmpty()) {
-                            found.joinToString("\n\n") {
+                        answer = when {
+                            query.isBlank() -> "اكتب سؤالك أولًا، مثل: كيف أغيّر الوقت؟"
+                            found.isNotEmpty() -> found.joinToString("\n\n") {
                                 "${it.name}\n${it.command}\n${it.description}"
                             }
-                        } else {
-                            "لم أجد شرحًا مطابقًا في المكتبة الحالية. جرّب كتابة اسم أمر مثل الوقت أو الطقس أو الألماس."
+                            else -> "لم أجد إجابة مطابقة في المكتبة الحالية. جرّب كلمات مثل: الوقت، الطقس، الألماس، القروي أو الطيران."
                         }
                     },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = Emerald)
                 ) {
-                    Text("اشرح لي")
+                    Text("اشرح لي", color = Color.Black)
                 }
-
                 if (answer.isNotEmpty()) {
                     Spacer(Modifier.height(18.dp))
-                    Text(
-                        "الشرح:",
-                        color = Emerald,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Text("الشرح:", color = Emerald, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(8.dp))
                     Text(answer, color = WhiteText)
                 }
             }
         }
-
         SectionTitle("أمثلة يمكنك السؤال عنها")
-
         listOf(
-            "كيف أغير الوقت؟",
+            "كيف أغيّر الوقت؟",
             "كيف أحصل على ألماس؟",
             "كيف أستدعي قرويًا؟",
-            "كيف أنتقل إلى لاعب؟"
-        ).forEach {
-            Text(
-                "• $it",
-                color = GrayText,
-                modifier = Modifier.padding(vertical = 6.dp)
-            )
+            "كيف أفعّل الطيران؟"
+        ).forEach { example ->
+            Text("• $example", color = GrayText, modifier = Modifier.padding(vertical = 6.dp))
         }
+        Spacer(Modifier.height(20.dp))
+        Text(
+            "ملاحظة: هذا مساعد محلي يعتمد على الشروحات الموجودة داخل التطبيق، ولا يحتاج إلى اتصال بالإنترنت.",
+            color = GrayText,
+            fontSize = 11.sp
+        )
     }
 }
 
 @Composable
-fun WorldScreen() {
+private fun WorldScreen() {
     val challenges = listOf(
         "تحدي البقاء: ابدأ دون أدوات وحاول البقاء 7 أيام.",
         "تحدي السماء: ابنِ منزلك فوق جزيرة عائمة.",
@@ -607,6 +583,12 @@ fun WorldScreen() {
         "تحدي الكهوف: استكشف الكهوف دون مغادرة العالم.",
         "تحدي البناء: ابنِ قلعة ضخمة خلال يوم واحد."
     )
+    val worldIdeas = listOf(
+        Triple("🏝️", "عالم الجزر", "جزر صغيرة وتحديات للبقاء."),
+        Triple("🏰", "عالم الممالك", "قرى وقلاع وممالك متنافسة."),
+        Triple("🌲", "عالم الغابات", "مغامرات وسط الغابات والكهوف.")
+    )
+    var chosenChallenge by rememberSaveable { mutableStateOf(challenges.first()) }
 
     Column(
         modifier = Modifier
@@ -615,52 +597,53 @@ fun WorldScreen() {
             .padding(18.dp)
     ) {
         Header("العوالم والتحديات")
-
         Text(
-            "اختر مغامرتك القادمة!",
+            "تحديك المقترح",
             color = Gold,
             fontSize = 20.sp,
             fontWeight = FontWeight.Bold
         )
-
-        challenges.forEachIndexed { index, challenge ->
-            FeatureCard(
-                "🌍",
-                "التحدي ${index + 1}",
-                challenge
-            ) {}
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = CardColor),
+            shape = RoundedCornerShape(18.dp)
+        ) {
+            Column(Modifier.padding(16.dp)) {
+                Text(chosenChallenge, color = WhiteText)
+                Spacer(Modifier.height(12.dp))
+                Button(
+                    onClick = {
+                        val alternatives = challenges.filterNot { it == chosenChallenge }
+                        chosenChallenge = alternatives.random()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Emerald)
+                ) {
+                    Text("اقترح تحديًا آخر", color = Color.Black)
+                }
+            }
         }
-
-        SectionTitle("منشئ أفكار العوالم")
-
+        SectionTitle("أفكار جاهزة للعوالم")
+        worldIdeas.forEach { idea ->
+            FeatureCard(idea.first, idea.second, idea.third) { }
+        }
+        SectionTitle("تحديات إضافية")
+        challenges.forEachIndexed { index, challenge ->
+            FeatureCard("🌍", "التحدي ${index + 1}", challenge) {
+                chosenChallenge = challenge
+            }
+        }
+        Spacer(Modifier.height(16.dp))
         Text(
-            "يمكنك استخدام هذه الأفكار لتصميم عالم جديد في ماين كرافت.",
-            color = GrayText
+            "هذه اقتراحات وأفكار تساعدك على إنشاء عالمك داخل Minecraft؛ التطبيق لا ينشئ العالم داخل اللعبة تلقائيًا.",
+            color = GrayText,
+            fontSize = 11.sp
         )
-
-        FeatureCard(
-            "🏝️",
-            "عالم الجزر",
-            "جزر صغيرة وتحديات للبقاء."
-        ) {}
-
-        FeatureCard(
-            "🏰",
-            "عالم الممالك",
-            "قرى وقلاع وممالك متنافسة."
-        ) {}
-
-        FeatureCard(
-            "🌲",
-            "عالم الغابات",
-            "مغامرات وسط الغابات والكهوف."
-        ) {}
     }
 }
 
 @Composable
-fun MoreScreen(onNavigate: (Int) -> Unit) {
-    var notifications by remember { mutableStateOf(true) }
+private fun MoreScreen() {
+    var notificationsEnabled by rememberSaveable { mutableStateOf(true) }
 
     Column(
         modifier = Modifier
@@ -671,51 +654,42 @@ fun MoreScreen(onNavigate: (Int) -> Unit) {
         Header("المزيد من MC LEGEND")
 
         SectionTitle("القرويون والتجارة")
-
         FeatureCard(
-            "🧑‍🌾",
+            "🌾",
             "القروي المزارع",
-            "يعمل في الزراعة ويتاجر بالمحاصيل."
-        ) {}
-
+            "يتاجر بالمحاصيل مثل القمح والجزر والبطاطس."
+        ) { }
         FeatureCard(
             "📚",
             "القروي أمين المكتبة",
-            "يتاجر بالكتب والأغراض السحرية."
-        ) {}
-
+            "قد يعرض كتبًا مسحورة ورفوف كتب وأغراضًا ورقية."
+        ) { }
         FeatureCard(
             "⚒️",
-            "القروي الحداد",
-            "يتاجر بالأدوات والأسلحة والدروع."
-        ) {}
-
+            "القروي صانع الأدوات والأسلحة",
+            "تختلف تجارته حسب المهنة ومستوى القروي."
+        ) { }
         FeatureCard(
             "🗺️",
             "القروي رسام الخرائط",
-            "يبيع الخرائط ويقدم خرائط الاستكشاف."
-        ) {}
+            "يساعدك في الحصول على خرائط للاستكشاف."
+        ) { }
 
         SectionTitle("السكنات والموارد")
-
         FeatureCard(
             "🎨",
             "السكنات",
-            "قسم مخصص لعرض السكنات وإضافتها لاحقًا."
-        ) {}
-
+            "قسم مخصص لعرض السكنات وإضافتها في تحديث لاحق."
+        ) { }
         FeatureCard(
             "🧱",
             "حزم الموارد",
-            "قسم لحزم المظاهر والموارد المتوافقة."
-        ) {}
+            "قسم لحزم المظاهر والموارد المتوافقة مع Minecraft Bedrock."
+        ) { }
 
         SectionTitle("التحديثات والإعدادات")
-
         Card(
-            colors = CardDefaults.cardColors(
-                containerColor = CardColor
-            ),
+            colors = CardDefaults.cardColors(containerColor = CardColor),
             shape = RoundedCornerShape(16.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -725,25 +699,19 @@ fun MoreScreen(onNavigate: (Int) -> Unit) {
                     color = WhiteText,
                     fontWeight = FontWeight.Bold
                 )
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         "تفعيل خيار الإشعارات",
                         color = GrayText,
                         modifier = Modifier.weight(1f)
                     )
                     Switch(
-                        checked = notifications,
-                        onCheckedChange = {
-                            notifications = it
-                        }
+                        checked = notificationsEnabled,
+                        onCheckedChange = { notificationsEnabled = it }
                     )
                 }
-
                 Text(
-                    "هذا الخيار يحفظ حالة التفضيل داخل الشاشة حاليًا. إرسال إشعارات تلقائية يحتاج إلى إعداد إضافي لاحقًا.",
+                    "هذا المفتاح يغيّر التفضيل داخل الشاشة فقط حاليًا. إرسال إشعارات تلقائية عند صدور تحديث يحتاج إلى إعداد إضافي.",
                     color = GrayText,
                     fontSize = 11.sp
                 )
@@ -751,7 +719,6 @@ fun MoreScreen(onNavigate: (Int) -> Unit) {
         }
 
         Spacer(Modifier.height(20.dp))
-
         Text(
             "MC LEGEND",
             color = Gold,
@@ -759,11 +726,11 @@ fun MoreScreen(onNavigate: (Int) -> Unit) {
             fontWeight = FontWeight.Black,
             modifier = Modifier.align(Alignment.CenterHorizontally)
         )
-
         Text(
             "الإصدار 2.0 • اصنع أسطورتك",
             color = GrayText,
             modifier = Modifier.align(Alignment.CenterHorizontally)
         )
+        Spacer(Modifier.height(20.dp))
     }
 }
