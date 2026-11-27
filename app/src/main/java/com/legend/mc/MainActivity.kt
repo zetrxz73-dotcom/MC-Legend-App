@@ -779,6 +779,11 @@ private fun MoreDetailScreen(
     section: String,
     onBack: () -> Unit
 ) {
+    if (section == "skins") {
+        SkinHubScreen(onBack = onBack)
+        return
+    }
+
     val title = when (section) {
         "farmer" -> "القروي المزارع"
         "librarian" -> "القروي أمين المكتبة"
