@@ -2,9 +2,11 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
 }
+
 android {
     namespace = "com.legend.mc"
     compileSdk = 34
+
     defaultConfig {
         applicationId = "com.legend.mc"
         minSdk = 24
@@ -12,25 +14,41 @@ android {
         versionCode = 1
         versionName = "1.0"
     }
+
+    signingConfigs {
+        create("release") {
+            storeFile = file("release-key.jks")
+            storePassword = System.getenv("MC_KEYSTORE_PASSWORD") ?: ""
+            keyAlias = "mclegend2026"
+            keyPassword = System.getenv("MC_KEYSTORE_PASSWORD") ?: ""
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
         }
     }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+
     kotlinOptions {
         jvmTarget = "17"
     }
+
     buildFeatures {
         compose = true
     }
+
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.4"
     }
 }
+
 dependencies {
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")

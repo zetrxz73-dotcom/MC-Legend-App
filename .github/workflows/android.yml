@@ -1,5 +1,4 @@
-
-name: Build MC LEGEND APK
+name: Build MC LEGEND
 
 on:
   workflow_dispatch:
@@ -33,14 +32,29 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Build APK
+      - name: Restore signing key
+        env:
+          MC_KEYSTORE_BASE64: ${{ secrets.MC_KEYSTORE_BASE64 }}
+        run: |
+          echo "$MC_KEYSTORE_BASE64" | base64 --decode > app/release-key.jks
+          test -s app/release-key.jks
+
+      - name: Build APKs
+        env:
+          MC_KEYSTORE_PASSWORD: ${{ secrets.MC_KEYSTORE_PASSWORD }}
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug assembleRelease
 
-      - name: Upload APK
+      - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: MC-LEGEND-APK
+          name: MC-LEGEND-DEBUG
           path: app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Upload Signed Release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: MC-LEGEND-RELEASE
+          path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
