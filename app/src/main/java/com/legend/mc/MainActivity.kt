@@ -644,6 +644,222 @@ private fun WorldScreen() {
 @Composable
 private fun MoreScreen() {
     var notificationsEnabled by rememberSaveable { mutableStateOf(true) }
+    var selectedSection by rememberSaveable { mutableStateOf("") }
+
+    if (selectedSection.isNotEmpty()) {
+        MoreDetailScreen(
+            section = selectedSection,
+            onBack = { selectedSection = "" }
+        )
+    } else {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(18.dp)
+        ) {
+            Header("المزيد من MC LEGEND")
+
+            SectionTitle("القرويون والتجارة")
+
+            FeatureCard(
+                "🌾",
+                "القروي المزارع",
+                "تعرف على مهنة المزارع وتجارته."
+            ) {
+                selectedSection = "farmer"
+            }
+
+            FeatureCard(
+                "📚",
+                "القروي أمين المكتبة",
+                "تعرف على الكتب المسحورة وتجارة المكتبي."
+            ) {
+                selectedSection = "librarian"
+            }
+
+            FeatureCard(
+                "⚒️",
+                "القروي صانع الأدوات والأسلحة",
+                "تعرف على صانع الأدوات وصانع الأسلحة."
+            ) {
+                selectedSection = "smith"
+            }
+
+            FeatureCard(
+                "🗺️",
+                "القروي رسام الخرائط",
+                "تعرف على الخرائط وطرق الاستكشاف."
+            ) {
+                selectedSection = "cartographer"
+            }
+
+            SectionTitle("السكنات والموارد")
+
+            FeatureCard(
+                "🎨",
+                "السكنات",
+                "تعرف على قسم السكنات."
+            ) {
+                selectedSection = "skins"
+            }
+
+            FeatureCard(
+                "🧱",
+                "حزم الموارد",
+                "تعرف على حزم المظاهر والموارد."
+            ) {
+                selectedSection = "resources"
+            }
+
+            SectionTitle("التحديثات والإعدادات")
+
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = CardColor
+                ),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(Modifier.padding(16.dp)) {
+                    Text(
+                        "إشعارات التحديثات",
+                        color = WhiteText,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "تفعيل خيار الإشعارات",
+                            color = GrayText,
+                            modifier = Modifier.weight(1f)
+                        )
+
+                        Switch(
+                            checked = notificationsEnabled,
+                            onCheckedChange = {
+                                notificationsEnabled = it
+                            }
+                        )
+                    }
+
+                    Text(
+                        "هذا المفتاح يحفظ التفضيل داخل الشاشة فقط حاليًا. الإشعارات التلقائية تحتاج إلى إعداد إضافي.",
+                        color = GrayText,
+                        fontSize = 11.sp
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(20.dp))
+
+            Text(
+                "MC LEGEND",
+                color = Gold,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Black,
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            )
+
+            Text(
+                "الإصدار 2.0 • اصنع أسطورتك",
+                color = GrayText,
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            )
+
+            Spacer(Modifier.height(20.dp))
+        }
+    }
+}
+
+@Composable
+private fun MoreDetailScreen(
+    section: String,
+    onBack: () -> Unit
+) {
+    val title = when (section) {
+        "farmer" -> "القروي المزارع"
+        "librarian" -> "القروي أمين المكتبة"
+        "smith" -> "صانع الأدوات والأسلحة"
+        "cartographer" -> "القروي رسام الخرائط"
+        "skins" -> "السكنات"
+        "resources" -> "حزم الموارد"
+        else -> "تفاصيل القسم"
+    }
+
+    val emoji = when (section) {
+        "farmer" -> "🌾"
+        "librarian" -> "📚"
+        "smith" -> "⚒️"
+        "cartographer" -> "🗺️"
+        "skins" -> "🎨"
+        "resources" -> "🧱"
+        else -> "◆"
+    }
+
+    val description = when (section) {
+        "farmer" ->
+            "القروي المزارع متخصص في تجارة المحاصيل وبعض الأطعمة. يمكنه مساعدتك في الحصول على الزمرد مقابل المحاصيل."
+
+        "librarian" ->
+            "أمين المكتبة من أهم القرويين؛ فقد يعرض كتبًا مسحورة ومواد مرتبطة بالكتب والتجارة."
+
+        "smith" ->
+            "يوجد صانع الأدوات وصانع الأسلحة، ولكل منهما محطة عمل وتجارة مختلفة."
+
+        "cartographer" ->
+            "رسام الخرائط يساعدك على شراء الخرائط وبعض الأدوات التي تفيدك في الاستكشاف."
+
+        "skins" ->
+            "هذا القسم مخصص للسكنات التي يمكنك استخدامها لتغيير مظهر شخصيتك في Minecraft."
+
+        "resources" ->
+            "حزم الموارد تغيّر مظهر اللعبة، مثل الخامات والأصوات وبعض عناصر الواجهة."
+
+        else -> "معلومات هذا القسم."
+    }
+
+    val tips = when (section) {
+        "farmer" -> listOf(
+            "محطة عمل المزارع هي السمّادة (Composter).",
+            "قد يتاجر بالقمح والجزر والبطاطس والبنجر، وتختلف الصفقات حسب المستوى والإصدار.",
+            "إتمام الصفقات يساعد القروي على رفع مستواه وفتح عروض إضافية."
+        )
+
+        "librarian" -> listOf(
+            "محطة عمل أمين المكتبة هي المنصة (Lectern).",
+            "قد يعرض كتبًا مسحورة ومواد ورقية وكتبًا.",
+            "تختلف عروض التجارة بحسب مستوى القروي وإصدار اللعبة."
+        )
+
+        "smith" -> listOf(
+            "محطة عمل صانع الأدوات هي طاولة الحدادة (Smithing Table).",
+            "محطة عمل صانع الأسلحة هي حجر الجلخ (Grindstone).",
+            "قد يبيعان أدوات وأسلحة، وتختلف العروض حسب مستوى القروي."
+        )
+
+        "cartographer" -> listOf(
+            "محطة عمل رسام الخرائط هي طاولة رسم الخرائط (Cartography Table).",
+            "يمكنه التجارة بالورق والخرائط وبعض أدوات الاستكشاف.",
+            "قد تختلف الخرائط والعروض حسب إصدار اللعبة ومستوى القروي."
+        )
+
+        "skins" -> listOf(
+            "السكن يغيّر مظهر شخصيتك داخل اللعبة.",
+            "تأكد من توافق السكن مع إصدار Minecraft الذي تستخدمه.",
+            "مكتبة تنزيل واستيراد السكنات غير متاحة في التطبيق حاليًا."
+        )
+
+        "resources" -> listOf(
+            "حزم الموارد قد تغيّر الخامات والأصوات ومظاهر عناصر اللعبة.",
+            "تحقق من توافق الحزمة مع إصدار Minecraft Bedrock لديك.",
+            "استعمل ملفات من مصادر موثوقة. استيراد الحزم من داخل التطبيق غير متاح حاليًا."
+        )
+
+        else -> listOf("لا توجد معلومات إضافية حاليًا.")
+    }
 
     Column(
         modifier = Modifier
@@ -651,86 +867,59 @@ private fun MoreScreen() {
             .verticalScroll(rememberScrollState())
             .padding(18.dp)
     ) {
-        Header("المزيد من MC LEGEND")
-
-        SectionTitle("القرويون والتجارة")
-        FeatureCard(
-            "🌾",
-            "القروي المزارع",
-            "يتاجر بالمحاصيل مثل القمح والجزر والبطاطس."
-        ) { }
-        FeatureCard(
-            "📚",
-            "القروي أمين المكتبة",
-            "قد يعرض كتبًا مسحورة ورفوف كتب وأغراضًا ورقية."
-        ) { }
-        FeatureCard(
-            "⚒️",
-            "القروي صانع الأدوات والأسلحة",
-            "تختلف تجارته حسب المهنة ومستوى القروي."
-        ) { }
-        FeatureCard(
-            "🗺️",
-            "القروي رسام الخرائط",
-            "يساعدك في الحصول على خرائط للاستكشاف."
-        ) { }
-
-        SectionTitle("السكنات والموارد")
-        FeatureCard(
-            "🎨",
-            "السكنات",
-            "قسم مخصص لعرض السكنات وإضافتها في تحديث لاحق."
-        ) { }
-        FeatureCard(
-            "🧱",
-            "حزم الموارد",
-            "قسم لحزم المظاهر والموارد المتوافقة مع Minecraft Bedrock."
-        ) { }
-
-        SectionTitle("التحديثات والإعدادات")
-        Card(
-            colors = CardDefaults.cardColors(containerColor = CardColor),
-            shape = RoundedCornerShape(16.dp),
+        OutlinedButton(
+            onClick = onBack,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Column(Modifier.padding(16.dp)) {
-                Text(
-                    "إشعارات التحديثات",
-                    color = WhiteText,
-                    fontWeight = FontWeight.Bold
+            Text("العودة إلى المزيد")
+        }
+
+        Header(title)
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    CardColor,
+                    RoundedCornerShape(18.dp)
                 )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        "تفعيل خيار الإشعارات",
-                        color = GrayText,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Switch(
-                        checked = notificationsEnabled,
-                        onCheckedChange = { notificationsEnabled = it }
-                    )
-                }
+                .padding(22.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(emoji, fontSize = 48.sp)
+        }
+
+        SectionTitle("نبذة عن القسم")
+
+        Text(
+            description,
+            color = WhiteText,
+            fontSize = 15.sp,
+            lineHeight = 23.sp
+        )
+
+        SectionTitle("معلومات ونصائح")
+
+        tips.forEach { tip ->
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = CardColor
+                ),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 5.dp)
+            ) {
                 Text(
-                    "هذا المفتاح يغيّر التفضيل داخل الشاشة فقط حاليًا. إرسال إشعارات تلقائية عند صدور تحديث يحتاج إلى إعداد إضافي.",
-                    color = GrayText,
-                    fontSize = 11.sp
+                    "•  $tip",
+                    color = WhiteText,
+                    fontSize = 14.sp,
+                    lineHeight = 22.sp,
+                    modifier = Modifier.padding(16.dp)
                 )
             }
         }
 
-        Spacer(Modifier.height(20.dp))
-        Text(
-            "MC LEGEND",
-            color = Gold,
-            fontSize = 22.sp,
-            fontWeight = FontWeight.Black,
-            modifier = Modifier.align(Alignment.CenterHorizontally)
-        )
-        Text(
-            "الإصدار 2.0 • اصنع أسطورتك",
-            color = GrayText,
-            modifier = Modifier.align(Alignment.CenterHorizontally)
-        )
         Spacer(Modifier.height(20.dp))
     }
 }
