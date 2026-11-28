@@ -192,7 +192,7 @@ class FloatingCommandService : Service() {
             textSize = 14f
             setTextColor(Color.WHITE)
             setHintTextColor(0xFF9EAAA2.toInt())
-            singleLine = true
+            setSingleLine(true)
             setPadding(dp(10), 0, dp(10), 0)
             background = shape(0xFF26352C.toInt(), 10)
         }
