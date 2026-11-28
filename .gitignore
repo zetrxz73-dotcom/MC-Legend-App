@@ -1,0 +1,7 @@
+
+# Local Gradle files
+.gradle/
+
+# Local backup files
+*.backup
+*.before-skins

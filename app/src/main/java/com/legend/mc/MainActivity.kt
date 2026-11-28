@@ -1,6 +1,12 @@
 package com.legend.mc
 
 import android.os.Bundle
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
+import android.widget.Toast
+import androidx.core.content.ContextCompat
+import androidx.compose.ui.platform.LocalContext
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
@@ -643,6 +649,7 @@ private fun WorldScreen() {
 
 @Composable
 private fun MoreScreen() {
+    val context = LocalContext.current
     var notificationsEnabled by rememberSaveable { mutableStateOf(true) }
     var selectedSection by rememberSaveable { mutableStateOf("") }
 
@@ -747,6 +754,85 @@ private fun MoreScreen() {
 
                     Text(
                         "هذا المفتاح يحفظ التفضيل داخل الشاشة فقط حاليًا. الإشعارات التلقائية تحتاج إلى إعداد إضافي.",
+                        color = GrayText,
+                        fontSize = 11.sp
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            SectionTitle("الفقاعة العائمة للأوامر")
+
+            Card(
+                colors = CardDefaults.cardColors(containerColor = CardColor),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(Modifier.padding(16.dp)) {
+                    Text(
+                        "أوامر Minecraft معك أثناء اللعب",
+                        color = WhiteText,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Text(
+                        "شغّل الدائرة لتظهر فوق التطبيقات، ثم افتحها للبحث عن الأوامر ونسخها.",
+                        color = GrayText,
+                        fontSize = 12.sp
+                    )
+
+                    Spacer(Modifier.height(12.dp))
+
+                    Button(
+                        onClick = {
+                            if (!Settings.canDrawOverlays(context)) {
+                                val intent = Intent(
+                                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                    Uri.parse("package:${context.packageName}")
+                                )
+                                context.startActivity(intent)
+                                Toast.makeText(
+                                    context,
+                                    "امنح MC LEGEND إذن الظهور فوق التطبيقات، ثم ارجع واضغط تشغيل مرة أخرى.",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            } else {
+                                ContextCompat.startForegroundService(
+                                    context,
+                                    Intent(context, FloatingCommandService::class.java)
+                                )
+                                Toast.makeText(
+                                    context,
+                                    "تم إرسال طلب تشغيل الفقاعة.",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = Emerald)
+                    ) {
+                        Text("تشغيل الفقاعة العائمة", color = Color.Black)
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            context.stopService(
+                                Intent(context, FloatingCommandService::class.java)
+                            )
+                            Toast.makeText(
+                                context,
+                                "تم إرسال طلب إيقاف الفقاعة.",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("إيقاف الفقاعة العائمة", color = WhiteText)
+                    }
+
+                    Text(
+                        "ملاحظة: قد لا تظهر الفقاعة فوق بعض الشاشات المحمية أو شاشات النظام.",
                         color = GrayText,
                         fontSize = 11.sp
                     )
