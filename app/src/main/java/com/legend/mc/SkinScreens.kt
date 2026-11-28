@@ -79,11 +79,7 @@ internal fun SkinHubScreen(onBack: () -> Unit) {
                     fontSize = 21.sp,
                     fontWeight = FontWeight.Bold
                 )
-                Text(
-                    "هنا سنضيف محرر تصميم السكنات وتلوين أجزاء الشخصية وحفظ التصميم وتصديره.",
-                    color = Color.LightGray,
-                    fontSize = 15.sp
-                )
+                SkinEditorScreen()
             }
 
             else -> {
